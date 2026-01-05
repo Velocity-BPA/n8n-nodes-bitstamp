@@ -1,0 +1,28 @@
+# Source files (not needed in npm package, dist is included)
+nodes/
+credentials/
+test/
+scripts/
+
+# Config files
+.eslintrc.js
+.prettierrc
+.gitignore
+tsconfig.json
+jest.config.js
+
+# IDE
+.idea/
+.vscode/
+
+# Git
+.git/
+.gitignore
+
+# Development
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+
+# Only include dist/, LICENSE, COMMERCIAL_LICENSE.md, LICENSING_FAQ.md, README.md, and package.json
