@@ -1,13 +1,4 @@
-/*
- * Copyright (c) Velocity BPA, LLC
- * Licensed under the Business Source License 1.1
- * Commercial use requires a separate commercial license.
- * See LICENSE file for details.
- */
-
-import type {
-	IAuthenticateGeneric,
-	ICredentialTestRequest,
+import {
 	ICredentialType,
 	INodeProperties,
 } from 'n8n-workflow';
@@ -21,43 +12,35 @@ export class BitstampApi implements ICredentialType {
 			displayName: 'API Key',
 			name: 'apiKey',
 			type: 'string',
+			typeOptions: { password: true },
 			default: '',
 			required: true,
-			description: 'Your Bitstamp API key',
+			description: 'The API key for Bitstamp API access',
 		},
 		{
 			displayName: 'API Secret',
 			name: 'apiSecret',
 			type: 'string',
-			typeOptions: {
-				password: true,
-			},
+			typeOptions: { password: true },
 			default: '',
 			required: true,
-			description: 'Your Bitstamp API secret',
+			description: 'The API secret for Bitstamp API access',
 		},
 		{
-			displayName: 'Client ID',
-			name: 'clientId',
+			displayName: 'Customer ID',
+			name: 'customerId',
 			type: 'string',
 			default: '',
 			required: true,
-			description: 'Your Bitstamp customer/user ID',
+			description: 'Your Bitstamp customer ID (username)',
+		},
+		{
+			displayName: 'API Base URL',
+			name: 'baseUrl',
+			type: 'string',
+			default: 'https://www.bitstamp.net/api/v2',
+			required: true,
+			description: 'The base URL for the Bitstamp API',
 		},
 	];
-
-	// Note: Bitstamp uses custom HMAC-SHA256 authentication
-	// Authentication is handled in GenericFunctions.ts
-	authenticate: IAuthenticateGeneric = {
-		type: 'generic',
-		properties: {},
-	};
-
-	test: ICredentialTestRequest = {
-		request: {
-			baseURL: 'https://www.bitstamp.net/api/v2',
-			url: '/ticker/btcusd/',
-			method: 'GET',
-		},
-	};
 }
