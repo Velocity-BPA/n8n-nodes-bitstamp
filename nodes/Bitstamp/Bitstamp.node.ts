@@ -1,696 +1,1637 @@
-/*
- * Copyright (c) Velocity BPA, LLC
- * Licensed under the Business Source License 1.1
- * Commercial use requires a separate commercial license.
- * See LICENSE file for details.
+/**
+ * Copyright (c) 2026 Velocity BPA
+ * 
+ * Licensed under the Business Source License 1.1 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *     https://github.com/VelocityBPA/n8n-nodes-bitstamp/blob/main/LICENSE
+ * 
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
-import type {
-	IDataObject,
-	IExecuteFunctions,
-	INodeExecutionData,
-	INodeType,
-	INodeTypeDescription,
+import {
+  IExecuteFunctions,
+  INodeExecutionData,
+  INodeType,
+  INodeTypeDescription,
+  NodeOperationError,
+  NodeApiError,
 } from 'n8n-workflow';
 
-import {
-	bitstampApiRequest,
-	bitstampApiRequestAllItems,
-	formatTradingPair,
-	logLicenseNotice,
-} from './GenericFunctions';
-
-import { accountOperations, accountFields } from './descriptions/AccountDescription';
-import { marketDataOperations, marketDataFields } from './descriptions/MarketDataDescription';
-import { tradingOperations, tradingFields } from './descriptions/TradingDescription';
-import { withdrawalOperations, withdrawalFields } from './descriptions/WithdrawalDescription';
-import { depositOperations, depositFields } from './descriptions/DepositDescription';
-import { stakingOperations, stakingFields } from './descriptions/StakingDescription';
+import { createHash, createHmac } from 'crypto';
+import * as crypto from 'crypto';
 
 export class Bitstamp implements INodeType {
-	description: INodeTypeDescription = {
-		displayName: 'Bitstamp',
-		name: 'bitstamp',
-		icon: 'file:bitstamp.svg',
-		group: ['transform'],
-		version: 1,
-		subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
-		description: 'Interact with Bitstamp cryptocurrency exchange API',
-		defaults: {
-			name: 'Bitstamp',
-		},
-		inputs: ['main'],
-		outputs: ['main'],
-		credentials: [
-			{
-				name: 'bitstampApi',
-				required: true,
-				displayOptions: {
-					show: {
-						resource: ['account', 'trading', 'withdrawal', 'deposit', 'staking'],
-					},
-				},
-			},
-		],
-		properties: [
-			{
-				displayName: 'Resource',
-				name: 'resource',
-				type: 'options',
-				noDataExpression: true,
-				options: [
-					{
-						name: 'Account',
-						value: 'account',
-						description: 'Account information and balances',
-					},
-					{
-						name: 'Deposit',
-						value: 'deposit',
-						description: 'Deposit addresses and pending deposits',
-					},
-					{
-						name: 'Market Data',
-						value: 'marketData',
-						description: 'Public market data (no authentication required)',
-					},
-					{
-						name: 'Staking',
-						value: 'staking',
-						description: 'Staking operations',
-					},
-					{
-						name: 'Trading',
-						value: 'trading',
-						description: 'Trading orders and operations',
-					},
-					{
-						name: 'Withdrawal',
-						value: 'withdrawal',
-						description: 'Withdrawal operations',
-					},
-				],
-				default: 'marketData',
-			},
-			...accountOperations,
-			...accountFields,
-			...marketDataOperations,
-			...marketDataFields,
-			...tradingOperations,
-			...tradingFields,
-			...withdrawalOperations,
-			...withdrawalFields,
-			...depositOperations,
-			...depositFields,
-			...stakingOperations,
-			...stakingFields,
-		],
-	};
+  description: INodeTypeDescription = {
+    displayName: 'Bitstamp',
+    name: 'bitstamp',
+    icon: 'file:bitstamp.svg',
+    group: ['transform'],
+    version: 1,
+    subtitle: '={{$parameter["operation"] + ": " + $parameter["resource"]}}',
+    description: 'Interact with the Bitstamp API',
+    defaults: {
+      name: 'Bitstamp',
+    },
+    inputs: ['main'],
+    outputs: ['main'],
+    credentials: [
+      {
+        name: 'bitstampApi',
+        required: true,
+      },
+    ],
+    properties: [
+      // Resource selector
+      {
+        displayName: 'Resource',
+        name: 'resource',
+        type: 'options',
+        noDataExpression: true,
+        options: [
+          {
+            name: 'TradingPairs',
+            value: 'tradingPairs',
+          },
+          {
+            name: 'Orders',
+            value: 'orders',
+          },
+          {
+            name: 'Account',
+            value: 'account',
+          },
+          {
+            name: 'Withdrawals',
+            value: 'withdrawals',
+          },
+          {
+            name: 'Deposits',
+            value: 'deposits',
+          }
+        ],
+        default: 'tradingPairs',
+      },
+      // Operation dropdowns per resource
+{
+  displayName: 'Operation',
+  name: 'operation',
+  type: 'options',
+  noDataExpression: true,
+  displayOptions: {
+    show: {
+      resource: ['tradingPairs'],
+    },
+  },
+  options: [
+    {
+      name: 'Get All Trading Pairs',
+      value: 'getAllTradingPairs',
+      description: 'Get all available trading pairs and their details',
+      action: 'Get all trading pairs',
+    },
+    {
+      name: 'Get Ticker',
+      value: 'getTicker',
+      description: 'Get ticker information for specific pair',
+      action: 'Get ticker information',
+    },
+    {
+      name: 'Get Hourly Ticker',
+      value: 'getHourlyTicker',
+      description: 'Get hourly ticker data for specific pair',
+      action: 'Get hourly ticker data',
+    },
+    {
+      name: 'Get Order Book',
+      value: 'getOrderBook',
+      description: 'Get order book for trading pair',
+      action: 'Get order book',
+    },
+    {
+      name: 'Get Transactions',
+      value: 'getTransactions',
+      description: 'Get recent transactions for trading pair',
+      action: 'Get recent transactions',
+    },
+  ],
+  default: 'getAllTradingPairs',
+},
+{
+  displayName: 'Operation',
+  name: 'operation',
+  type: 'options',
+  noDataExpression: true,
+  displayOptions: {
+    show: {
+      resource: ['orders'],
+    },
+  },
+  options: [
+    {
+      name: 'Create Buy Order',
+      value: 'createBuyOrder',
+      description: 'Place a buy order',
+      action: 'Create buy order',
+    },
+    {
+      name: 'Create Sell Order',
+      value: 'createSellOrder',
+      description: 'Place a sell order',
+      action: 'Create sell order',
+    },
+    {
+      name: 'Create Market Buy Order',
+      value: 'createMarketBuyOrder',
+      description: 'Place a market buy order',
+      action: 'Create market buy order',
+    },
+    {
+      name: 'Create Market Sell Order',
+      value: 'createMarketSellOrder',
+      description: 'Place a market sell order',
+      action: 'Create market sell order',
+    },
+    {
+      name: 'Cancel Order',
+      value: 'cancelOrder',
+      description: 'Cancel an order',
+      action: 'Cancel order',
+    },
+    {
+      name: 'Cancel All Orders',
+      value: 'cancelAllOrders',
+      description: 'Cancel all open orders',
+      action: 'Cancel all orders',
+    },
+    {
+      name: 'Get Open Orders',
+      value: 'getOpenOrders',
+      description: 'Get open orders',
+      action: 'Get open orders',
+    },
+    {
+      name: 'Get Order Status',
+      value: 'getOrderStatus',
+      description: 'Get order status',
+      action: 'Get order status',
+    },
+  ],
+  default: 'createBuyOrder',
+},
+{
+  displayName: 'Operation',
+  name: 'operation',
+  type: 'options',
+  noDataExpression: true,
+  displayOptions: {
+    show: {
+      resource: ['account'],
+    },
+  },
+  options: [
+    {
+      name: 'Get Balance',
+      value: 'getBalance',
+      description: 'Get account balance',
+      action: 'Get balance',
+    },
+    {
+      name: 'Get Pair Balance',
+      value: 'getPairBalance',
+      description: 'Get balance for specific pair',
+      action: 'Get pair balance',
+    },
+    {
+      name: 'Get User Transactions',
+      value: 'getUserTransactions',
+      description: 'Get user transaction history',
+      action: 'Get user transactions',
+    },
+    {
+      name: 'Get Pair Transactions',
+      value: 'getPairTransactions',
+      description: 'Get transactions for specific pair',
+      action: 'Get pair transactions',
+    },
+    {
+      name: 'Get Trading Fees',
+      value: 'getTradingFees',
+      description: 'Get trading fees for pair',
+      action: 'Get trading fees',
+    },
+  ],
+  default: 'getBalance',
+},
+{
+  displayName: 'Operation',
+  name: 'operation',
+  type: 'options',
+  noDataExpression: true,
+  displayOptions: {
+    show: {
+      resource: ['withdrawals'],
+    },
+  },
+  options: [
+    {
+      name: 'Get Withdrawal Requests',
+      value: 'getWithdrawalRequests',
+      description: 'Get withdrawal requests',
+      action: 'Get withdrawal requests',
+    },
+    {
+      name: 'Get Open Withdrawals',
+      value: 'getOpenWithdrawals',
+      description: 'Get open withdrawal requests',
+      action: 'Get open withdrawals',
+    },
+    {
+      name: 'Get Withdrawal Status',
+      value: 'getWithdrawalStatus',
+      description: 'Get withdrawal status',
+      action: 'Get withdrawal status',
+    },
+    {
+      name: 'Cancel Withdrawal',
+      value: 'cancelWithdrawal',
+      description: 'Cancel withdrawal request',
+      action: 'Cancel withdrawal',
+    },
+    {
+      name: 'Withdraw Bitcoin',
+      value: 'withdrawBitcoin',
+      description: 'Withdraw Bitcoin',
+      action: 'Withdraw Bitcoin',
+    },
+    {
+      name: 'Withdraw Litecoin',
+      value: 'withdrawLitecoin',
+      description: 'Withdraw Litecoin',
+      action: 'Withdraw Litecoin',
+    },
+    {
+      name: 'Withdraw Ethereum',
+      value: 'withdrawEthereum',
+      description: 'Withdraw Ethereum',
+      action: 'Withdraw Ethereum',
+    },
+    {
+      name: 'Withdraw Fiat',
+      value: 'withdrawFiat',
+      description: 'Bank withdrawal',
+      action: 'Withdraw fiat',
+    },
+  ],
+  default: 'getWithdrawalRequests',
+},
+{
+  displayName: 'Operation',
+  name: 'operation',
+  type: 'options',
+  noDataExpression: true,
+  displayOptions: {
+    show: {
+      resource: ['deposits'],
+    },
+  },
+  options: [
+    {
+      name: 'Get Bitcoin Address',
+      value: 'getBitcoinAddress',
+      description: 'Get Bitcoin deposit address',
+      action: 'Get Bitcoin deposit address',
+    },
+    {
+      name: 'Get Litecoin Address',
+      value: 'getLitecoinAddress',
+      description: 'Get Litecoin deposit address',
+      action: 'Get Litecoin deposit address',
+    },
+    {
+      name: 'Get Ethereum Address',
+      value: 'getEthereumAddress',
+      description: 'Get Ethereum deposit address',
+      action: 'Get Ethereum deposit address',
+    },
+    {
+      name: 'Get Ripple Address',
+      value: 'getRippleAddress',
+      description: 'Get XRP deposit address',
+      action: 'Get XRP deposit address',
+    },
+    {
+      name: 'Transfer to Main',
+      value: 'transferToMain',
+      description: 'Transfer from sub account to main',
+      action: 'Transfer from sub account to main',
+    },
+    {
+      name: 'Transfer from Main',
+      value: 'transferFromMain',
+      description: 'Transfer from main to sub account',
+      action: 'Transfer from main to sub account',
+    },
+  ],
+  default: 'getBitcoinAddress',
+},
+      // Parameter definitions
+{
+  displayName: 'Trading Pair',
+  name: 'pair',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['tradingPairs'],
+      operation: ['getTicker'],
+    },
+  },
+  default: 'btcusd',
+  description: 'The trading pair symbol (e.g., btcusd, ethusd)',
+},
+{
+  displayName: 'Trading Pair',
+  name: 'pair',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['tradingPairs'],
+      operation: ['getHourlyTicker'],
+    },
+  },
+  default: 'btcusd',
+  description: 'The trading pair symbol (e.g., btcusd, ethusd)',
+},
+{
+  displayName: 'Trading Pair',
+  name: 'pair',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['tradingPairs'],
+      operation: ['getOrderBook'],
+    },
+  },
+  default: 'btcusd',
+  description: 'The trading pair symbol (e.g., btcusd, ethusd)',
+},
+{
+  displayName: 'Group',
+  name: 'group',
+  type: 'options',
+  displayOptions: {
+    show: {
+      resource: ['tradingPairs'],
+      operation: ['getOrderBook'],
+    },
+  },
+  options: [
+    {
+      name: '0',
+      value: '0',
+      description: 'No grouping',
+    },
+    {
+      name: '1',
+      value: '1',
+      description: 'Group orders by price',
+    },
+    {
+      name: '2',
+      value: '2',
+      description: 'Group orders by price (higher precision)',
+    },
+  ],
+  default: '1',
+  description: 'Group orders in the order book',
+},
+{
+  displayName: 'Trading Pair',
+  name: 'pair',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['tradingPairs'],
+      operation: ['getTransactions'],
+    },
+  },
+  default: 'btcusd',
+  description: 'The trading pair symbol (e.g., btcusd, ethusd)',
+},
+{
+  displayName: 'Time Frame',
+  name: 'time',
+  type: 'options',
+  displayOptions: {
+    show: {
+      resource: ['tradingPairs'],
+      operation: ['getTransactions'],
+    },
+  },
+  options: [
+    {
+      name: 'Hour',
+      value: 'hour',
+      description: 'Transactions from the last hour',
+    },
+    {
+      name: 'Minute',
+      value: 'minute',
+      description: 'Transactions from the last minute',
+    },
+  ],
+  default: 'hour',
+  description: 'Time frame for transaction data',
+},
+{
+  displayName: 'Trading Pair',
+  name: 'pair',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['orders'],
+      operation: ['createBuyOrder', 'createSellOrder', 'createMarketBuyOrder', 'createMarketSellOrder', 'getOpenOrders'],
+    },
+  },
+  default: 'btcusd',
+  description: 'The trading pair (e.g., btcusd, ethusd)',
+},
+{
+  displayName: 'Amount',
+  name: 'amount',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['orders'],
+      operation: ['createBuyOrder', 'createSellOrder', 'createMarketBuyOrder', 'createMarketSellOrder'],
+    },
+  },
+  default: '',
+  description: 'Amount to buy or sell',
+},
+{
+  displayName: 'Price',
+  name: 'price',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['orders'],
+      operation: ['createBuyOrder', 'createSellOrder'],
+    },
+  },
+  default: '',
+  description: 'Price per unit',
+},
+{
+  displayName: 'Order Type',
+  name: 'type',
+  type: 'options',
+  options: [
+    {
+      name: 'Limit',
+      value: 'limit',
+    },
+    {
+      name: 'Stop Loss',
+      value: 'stop_loss',
+    },
+    {
+      name: 'Take Profit',
+      value: 'take_profit',
+    },
+  ],
+  displayOptions: {
+    show: {
+      resource: ['orders'],
+      operation: ['createBuyOrder', 'createSellOrder'],
+    },
+  },
+  default: 'limit',
+  description: 'Type of order',
+},
+{
+  displayName: 'Time in Force',
+  name: 'timeInForce',
+  type: 'options',
+  options: [
+    {
+      name: 'Good Till Cancelled',
+      value: 'GTC',
+    },
+    {
+      name: 'Immediate or Cancel',
+      value: 'IOC',
+    },
+    {
+      name: 'Fill or Kill',
+      value: 'FOK',
+    },
+  ],
+  displayOptions: {
+    show: {
+      resource: ['orders'],
+      operation: ['createBuyOrder', 'createSellOrder'],
+    },
+  },
+  default: 'GTC',
+  description: 'Time in force for the order',
+},
+{
+  displayName: 'Order ID',
+  name: 'orderId',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['orders'],
+      operation: ['cancelOrder', 'getOrderStatus'],
+    },
+  },
+  default: '',
+  description: 'ID of the order',
+},
+{
+  displayName: 'Pair',
+  name: 'pair',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['account'],
+      operation: ['getPairBalance', 'getPairTransactions', 'getTradingFees'],
+    },
+  },
+  default: 'btcusd',
+  description: 'Trading pair (e.g., btcusd, ethusd)',
+},
+{
+  displayName: 'Offset',
+  name: 'offset',
+  type: 'number',
+  required: false,
+  displayOptions: {
+    show: {
+      resource: ['account'],
+      operation: ['getUserTransactions', 'getPairTransactions'],
+    },
+  },
+  default: 0,
+  description: 'Skip this many transactions before returning results',
+},
+{
+  displayName: 'Limit',
+  name: 'limit',
+  type: 'number',
+  required: false,
+  displayOptions: {
+    show: {
+      resource: ['account'],
+      operation: ['getUserTransactions', 'getPairTransactions'],
+    },
+  },
+  default: 100,
+  description: 'Maximum number of transactions to return',
+},
+{
+  displayName: 'Sort',
+  name: 'sort',
+  type: 'options',
+  required: false,
+  displayOptions: {
+    show: {
+      resource: ['account'],
+      operation: ['getUserTransactions', 'getPairTransactions'],
+    },
+  },
+  options: [
+    {
+      name: 'Ascending',
+      value: 'asc',
+    },
+    {
+      name: 'Descending',
+      value: 'desc',
+    },
+  ],
+  default: 'desc',
+  description: 'Sort transactions by datetime',
+},
+{
+  displayName: 'Time Delta',
+  name: 'timedelta',
+  type: 'number',
+  displayOptions: {
+    show: {
+      resource: ['withdrawals'],
+      operation: ['getWithdrawalRequests'],
+    },
+  },
+  default: 86400,
+  description: 'Time delta in seconds',
+},
+{
+  displayName: 'Withdrawal ID',
+  name: 'id',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['withdrawals'],
+      operation: ['getWithdrawalStatus', 'cancelWithdrawal'],
+    },
+  },
+  default: '',
+  description: 'The withdrawal ID',
+},
+{
+  displayName: 'Amount',
+  name: 'amount',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['withdrawals'],
+      operation: ['withdrawBitcoin', 'withdrawLitecoin', 'withdrawEthereum', 'withdrawFiat'],
+    },
+  },
+  default: '',
+  description: 'Amount to withdraw',
+},
+{
+  displayName: 'Address',
+  name: 'address',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['withdrawals'],
+      operation: ['withdrawBitcoin', 'withdrawLitecoin', 'withdrawEthereum'],
+    },
+  },
+  default: '',
+  description: 'Cryptocurrency address',
+},
+{
+  displayName: 'Instant',
+  name: 'instant',
+  type: 'boolean',
+  displayOptions: {
+    show: {
+      resource: ['withdrawals'],
+      operation: ['withdrawBitcoin'],
+    },
+  },
+  default: false,
+  description: 'Whether to use instant withdrawal',
+},
+{
+  displayName: 'Account Currency',
+  name: 'account_currency',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['withdrawals'],
+      operation: ['withdrawFiat'],
+    },
+  },
+  default: 'EUR',
+  description: 'Account currency (e.g., EUR, USD)',
+},
+{
+  displayName: 'Name',
+  name: 'name',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['withdrawals'],
+      operation: ['withdrawFiat'],
+    },
+  },
+  default: '',
+  description: 'Beneficiary name',
+},
+{
+  displayName: 'IBAN',
+  name: 'iban',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['withdrawals'],
+      operation: ['withdrawFiat'],
+    },
+  },
+  default: '',
+  description: 'International Bank Account Number',
+},
+{
+  displayName: 'BIC',
+  name: 'bic',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['withdrawals'],
+      operation: ['withdrawFiat'],
+    },
+  },
+  default: '',
+  description: 'Bank Identifier Code',
+},
+{
+  displayName: 'Amount',
+  name: 'amount',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['deposits'],
+      operation: ['transferToMain', 'transferFromMain'],
+    },
+  },
+  default: '',
+  description: 'The amount to transfer',
+},
+{
+  displayName: 'Currency',
+  name: 'currency',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['deposits'],
+      operation: ['transferToMain', 'transferFromMain'],
+    },
+  },
+  default: '',
+  description: 'The currency to transfer (e.g., BTC, ETH, USD)',
+},
+{
+  displayName: 'Sub Account',
+  name: 'subaccount',
+  type: 'string',
+  required: true,
+  displayOptions: {
+    show: {
+      resource: ['deposits'],
+      operation: ['transferToMain', 'transferFromMain'],
+    },
+  },
+  default: '',
+  description: 'The sub account identifier',
+},
+    ],
+  };
 
-	async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
-		// Log licensing notice once per execution
-		logLicenseNotice(this);
+  async execute(this: IExecuteFunctions): Promise<INodeExecutionData[][]> {
+    const items = this.getInputData();
+    const resource = this.getNodeParameter('resource', 0) as string;
 
-		const items = this.getInputData();
-		const returnData: INodeExecutionData[] = [];
+    switch (resource) {
+      case 'tradingPairs':
+        return [await executeTradingPairsOperations.call(this, items)];
+      case 'orders':
+        return [await executeOrdersOperations.call(this, items)];
+      case 'account':
+        return [await executeAccountOperations.call(this, items)];
+      case 'withdrawals':
+        return [await executeWithdrawalsOperations.call(this, items)];
+      case 'deposits':
+        return [await executeDepositsOperations.call(this, items)];
+      default:
+        throw new NodeOperationError(this.getNode(), `The resource "${resource}" is not supported`);
+    }
+  }
+}
 
-		const resource = this.getNodeParameter('resource', 0) as string;
-		const operation = this.getNodeParameter('operation', 0) as string;
+// ============================================================
+// Resource Handler Functions
+// ============================================================
 
-		for (let i = 0; i < items.length; i++) {
-			try {
-				let responseData: IDataObject | IDataObject[];
+function generateNonce(): string {
+  return Date.now().toString();
+}
 
-				// Account Resource
-				if (resource === 'account') {
-					if (operation === 'getBalance') {
-						responseData = await bitstampApiRequest.call(this, 'POST', 'balance');
-					} else if (operation === 'getBalanceByCurrency') {
-						const currency = this.getNodeParameter('currency', i) as string;
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							`balance/${currency}`,
-						);
-					} else if (operation === 'getUserTransactions') {
-						const currencyPair = this.getNodeParameter('currencyPair', i, '') as string;
-						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+function generateSignature(nonce: string, customerId: string, apiKey: string, apiSecret: string): string {
+  const message = nonce + customerId + apiKey;
+  return createHmac('sha256', apiSecret).update(message).digest('hex').toUpperCase();
+}
 
-						const body: IDataObject = {};
-						if (additionalFields.offset) {
-							body.offset = additionalFields.offset;
-						}
-						if (additionalFields.sort) {
-							body.sort = additionalFields.sort;
-						}
-						if (additionalFields.sinceTimestamp) {
-							body.since_timestamp = Math.floor(
-								new Date(additionalFields.sinceTimestamp as string).getTime() / 1000,
-							);
-						}
+async function executeTradingPairsOperations(
+  this: IExecuteFunctions,
+  items: INodeExecutionData[],
+): Promise<INodeExecutionData[]> {
+  const returnData: INodeExecutionData[] = [];
+  const operation = this.getNodeParameter('operation', 0) as string;
+  const credentials = await this.getCredentials('bitstampApi') as any;
 
-						const endpoint = currencyPair
-							? `user_transactions/${currencyPair}`
-							: 'user_transactions';
+  for (let i = 0; i < items.length; i++) {
+    try {
+      let result: any;
+      
+      switch (operation) {
+        case 'getAllTradingPairs': {
+          const options: any = {
+            method: 'GET',
+            url: 'https://www.bitstamp.net/api/v2/trading-pairs-info/',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            json: true,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getTicker': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          
+          const options: any = {
+            method: 'GET',
+            url: `https://www.bitstamp.net/api/v2/ticker/${pair}/`,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            json: true,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getHourlyTicker': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          
+          const options: any = {
+            method: 'GET',
+            url: `https://www.bitstamp.net/api/v2/ticker_hour/${pair}/`,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            json: true,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getOrderBook': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          const group = this.getNodeParameter('group', i, '1') as string;
+          
+          const queryParams = new URLSearchParams();
+          queryParams.append('group', group);
+          
+          const options: any = {
+            method: 'GET',
+            url: `https://www.bitstamp.net/api/v2/order_book/${pair}/?${queryParams.toString()}`,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            json: true,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getTransactions': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          const time = this.getNodeParameter('time', i, 'hour') as string;
+          
+          const queryParams = new URLSearchParams();
+          queryParams.append('time', time);
+          
+          const options: any = {
+            method: 'GET',
+            url: `https://www.bitstamp.net/api/v2/transactions/${pair}/?${queryParams.toString()}`,
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            json: true,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        default:
+          throw new NodeOperationError(this.getNode(), `Unknown operation: ${operation}`);
+      }
+      
+      returnData.push({ 
+        json: result, 
+        pairedItem: { item: i } 
+      });
+      
+    } catch (error: any) {
+      if (this.continueOnFail()) {
+        returnData.push({ 
+          json: { error: error.message }, 
+          pairedItem: { item: i } 
+        });
+      } else {
+        throw new NodeApiError(this.getNode(), error);
+      }
+    }
+  }
+  
+  return returnData;
+}
 
-						if (returnAll) {
-							responseData = await bitstampApiRequestAllItems.call(
-								this,
-								'POST',
-								endpoint,
-								body,
-							);
-						} else {
-							const limit = this.getNodeParameter('limit', i) as number;
-							body.limit = limit;
-							responseData = await bitstampApiRequest.call(this, 'POST', endpoint, body);
-						}
-					} else if (operation === 'getAllFees') {
-						responseData = await bitstampApiRequest.call(this, 'POST', 'fees/trading');
-					} else if (operation === 'getFeeByMarket') {
-						const currencyPair = this.getNodeParameter('currencyPair', i) as string;
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							`fees/trading/${currencyPair}`,
-						);
-					} else if (operation === 'getAccountInfo') {
-						responseData = await bitstampApiRequest.call(this, 'POST', 'account_balances');
-					} else {
-						throw new Error(`Unknown operation: ${operation}`);
-					}
-				}
+function generateNonce(): string {
+  return Date.now().toString();
+}
 
-				// Market Data Resource (Public endpoints)
-				else if (resource === 'marketData') {
-					if (operation === 'getTicker') {
-						const currencyPair = this.getNodeParameter('currencyPair', i) as string;
-						responseData = await bitstampApiRequest.call(
-							this,
-							'GET',
-							`ticker/${currencyPair}`,
-							{},
-							true,
-						);
-					} else if (operation === 'getHourlyTicker') {
-						const currencyPair = this.getNodeParameter('currencyPair', i) as string;
-						responseData = await bitstampApiRequest.call(
-							this,
-							'GET',
-							`ticker_hour/${currencyPair}`,
-							{},
-							true,
-						);
-					} else if (operation === 'getOrderBook') {
-						const currencyPair = this.getNodeParameter('currencyPair', i) as string;
-						const group = this.getNodeParameter('group', i, 0) as number;
-						responseData = await bitstampApiRequest.call(
-							this,
-							'GET',
-							`order_book/${currencyPair}?group=${group}`,
-							{},
-							true,
-						);
-					} else if (operation === 'getTransactions') {
-						const currencyPair = this.getNodeParameter('currencyPair', i) as string;
-						const time = this.getNodeParameter('time', i, 'hour') as string;
-						responseData = await bitstampApiRequest.call(
-							this,
-							'GET',
-							`transactions/${currencyPair}?time=${time}`,
-							{},
-							true,
-						);
-					} else if (operation === 'getOHLC') {
-						const currencyPair = this.getNodeParameter('currencyPair', i) as string;
-						const step = this.getNodeParameter('step', i) as number;
-						const limit = this.getNodeParameter('limit', i) as number;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+function generateSignature(nonce: string, clientId: string, apiKey: string, apiSecret: string): string {
+  const message = nonce + clientId + apiKey;
+  return crypto.createHmac('sha256', apiSecret).update(message).digest('hex').toUpperCase();
+}
 
-						let url = `ohlc/${currencyPair}?step=${step}&limit=${limit}`;
+async function executeOrdersOperations(
+  this: IExecuteFunctions,
+  items: INodeExecutionData[],
+): Promise<INodeExecutionData[]> {
+  const returnData: INodeExecutionData[] = [];
+  const operation = this.getNodeParameter('operation', 0) as string;
+  const credentials = await this.getCredentials('bitstampApi') as any;
 
-						if (additionalFields.start) {
-							const startTime = Math.floor(
-								new Date(additionalFields.start as string).getTime() / 1000,
-							);
-							url += `&start=${startTime}`;
-						}
-						if (additionalFields.end) {
-							const endTime = Math.floor(
-								new Date(additionalFields.end as string).getTime() / 1000,
-							);
-							url += `&end=${endTime}`;
-						}
-						if (additionalFields.exclude_current_candle) {
-							url += '&exclude_current_candle=true';
-						}
+  for (let i = 0; i < items.length; i++) {
+    try {
+      let result: any;
+      const nonce = generateNonce();
+      const signature = generateSignature(nonce, credentials.clientId, credentials.apiKey, credentials.apiSecret);
 
-						responseData = await bitstampApiRequest.call(this, 'GET', url, {}, true);
-					} else if (operation === 'getTradingPairs') {
-						responseData = await bitstampApiRequest.call(
-							this,
-							'GET',
-							'trading-pairs-info',
-							{},
-							true,
-						);
-					} else if (operation === 'getEurUsdRate') {
-						responseData = await bitstampApiRequest.call(this, 'GET', 'eur_usd', {}, true);
-					} else {
-						throw new Error(`Unknown operation: ${operation}`);
-					}
-				}
+      const baseParams = new URLSearchParams({
+        key: credentials.apiKey,
+        signature: signature,
+        nonce: nonce,
+      });
 
-				// Trading Resource
-				else if (resource === 'trading') {
-					if (operation === 'placeBuyLimitOrder') {
-						const currencyPair = formatTradingPair(
-							this.getNodeParameter('currencyPair', i) as string,
-						);
-						const amount = this.getNodeParameter('amount', i) as string;
-						const price = this.getNodeParameter('price', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+      switch (operation) {
+        case 'createBuyOrder': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          const amount = this.getNodeParameter('amount', i) as string;
+          const price = this.getNodeParameter('price', i) as string;
+          const type = this.getNodeParameter('type', i) as string;
+          const timeInForce = this.getNodeParameter('timeInForce', i) as string;
 
-						const body: IDataObject = {
-							amount,
-							price,
-						};
+          baseParams.append('amount', amount);
+          baseParams.append('price', price);
+          if (type) baseParams.append('type', type);
+          if (timeInForce) baseParams.append('time_in_force', timeInForce);
 
-						if (additionalFields.client_order_id) {
-							body.client_order_id = additionalFields.client_order_id;
-						}
-						if (additionalFields.ioc_order) {
-							body.ioc_order = additionalFields.ioc_order;
-						}
-						if (additionalFields.fok_order) {
-							body.fok_order = additionalFields.fok_order;
-						}
-						if (additionalFields.gtd_datetime) {
-							body.gtd_datetime = additionalFields.gtd_datetime;
-						}
+          const options: any = {
+            method: 'POST',
+            url: `https://www.bitstamp.net/api/v2/buy/${pair}/`,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: baseParams.toString(),
+          };
 
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							`buy/${currencyPair}`,
-							body,
-						);
-					} else if (operation === 'placeSellLimitOrder') {
-						const currencyPair = formatTradingPair(
-							this.getNodeParameter('currencyPair', i) as string,
-						);
-						const amount = this.getNodeParameter('amount', i) as string;
-						const price = this.getNodeParameter('price', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
 
-						const body: IDataObject = {
-							amount,
-							price,
-						};
+        case 'createSellOrder': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          const amount = this.getNodeParameter('amount', i) as string;
+          const price = this.getNodeParameter('price', i) as string;
+          const type = this.getNodeParameter('type', i) as string;
+          const timeInForce = this.getNodeParameter('timeInForce', i) as string;
 
-						if (additionalFields.client_order_id) {
-							body.client_order_id = additionalFields.client_order_id;
-						}
-						if (additionalFields.ioc_order) {
-							body.ioc_order = additionalFields.ioc_order;
-						}
-						if (additionalFields.fok_order) {
-							body.fok_order = additionalFields.fok_order;
-						}
-						if (additionalFields.gtd_datetime) {
-							body.gtd_datetime = additionalFields.gtd_datetime;
-						}
+          baseParams.append('amount', amount);
+          baseParams.append('price', price);
+          if (type) baseParams.append('type', type);
+          if (timeInForce) baseParams.append('time_in_force', timeInForce);
 
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							`sell/${currencyPair}`,
-							body,
-						);
-					} else if (operation === 'placeBuyMarketOrder') {
-						const currencyPair = formatTradingPair(
-							this.getNodeParameter('currencyPair', i) as string,
-						);
-						const amount = this.getNodeParameter('amount', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+          const options: any = {
+            method: 'POST',
+            url: `https://www.bitstamp.net/api/v2/sell/${pair}/`,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: baseParams.toString(),
+          };
 
-						const body: IDataObject = { amount };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
 
-						if (additionalFields.client_order_id) {
-							body.client_order_id = additionalFields.client_order_id;
-						}
+        case 'createMarketBuyOrder': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          const amount = this.getNodeParameter('amount', i) as string;
 
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							`buy/market/${currencyPair}`,
-							body,
-						);
-					} else if (operation === 'placeSellMarketOrder') {
-						const currencyPair = formatTradingPair(
-							this.getNodeParameter('currencyPair', i) as string,
-						);
-						const amount = this.getNodeParameter('amount', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+          baseParams.append('amount', amount);
 
-						const body: IDataObject = { amount };
+          const options: any = {
+            method: 'POST',
+            url: `https://www.bitstamp.net/api/v2/buy/market/${pair}/`,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: baseParams.toString(),
+          };
 
-						if (additionalFields.client_order_id) {
-							body.client_order_id = additionalFields.client_order_id;
-						}
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
 
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							`sell/market/${currencyPair}`,
-							body,
-						);
-					} else if (operation === 'placeBuyInstantOrder') {
-						const currencyPair = formatTradingPair(
-							this.getNodeParameter('currencyPair', i) as string,
-						);
-						const amount = this.getNodeParameter('amount', i) as string;
-						const limitPrice = this.getNodeParameter('limitPrice', i, '') as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+        case 'createMarketSellOrder': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          const amount = this.getNodeParameter('amount', i) as string;
 
-						const body: IDataObject = { amount };
+          baseParams.append('amount', amount);
 
-						if (limitPrice) {
-							body.limit_price = limitPrice;
-						}
-						if (additionalFields.client_order_id) {
-							body.client_order_id = additionalFields.client_order_id;
-						}
+          const options: any = {
+            method: 'POST',
+            url: `https://www.bitstamp.net/api/v2/sell/market/${pair}/`,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: baseParams.toString(),
+          };
 
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							`buy/instant/${currencyPair}`,
-							body,
-						);
-					} else if (operation === 'placeSellInstantOrder') {
-						const currencyPair = formatTradingPair(
-							this.getNodeParameter('currencyPair', i) as string,
-						);
-						const amount = this.getNodeParameter('amount', i) as string;
-						const limitPrice = this.getNodeParameter('limitPrice', i, '') as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
 
-						const body: IDataObject = { amount };
+        case 'cancelOrder': {
+          const orderId = this.getNodeParameter('orderId', i) as string;
 
-						if (limitPrice) {
-							body.limit_price = limitPrice;
-						}
-						if (additionalFields.client_order_id) {
-							body.client_order_id = additionalFields.client_order_id;
-						}
+          baseParams.append('id', orderId);
 
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							`sell/instant/${currencyPair}`,
-							body,
-						);
-					} else if (operation === 'cancelOrder') {
-						const orderId = this.getNodeParameter('orderId', i) as string;
-						responseData = await bitstampApiRequest.call(this, 'POST', 'cancel_order', {
-							id: orderId,
-						});
-					} else if (operation === 'cancelAllOrders') {
-						const currencyPair = this.getNodeParameter('currencyPair', i) as string;
-						const endpoint =
-							currencyPair === 'all'
-								? 'cancel_all_orders'
-								: `cancel_all_orders/${currencyPair}`;
-						responseData = await bitstampApiRequest.call(this, 'POST', endpoint);
-					} else if (operation === 'getOpenOrders') {
-						const currencyPair = this.getNodeParameter('currencyPair', i) as string;
-						const endpoint =
-							currencyPair === 'all'
-								? 'open_orders/all'
-								: `open_orders/${currencyPair}`;
-						responseData = await bitstampApiRequest.call(this, 'POST', endpoint);
-					} else if (operation === 'getOrderStatus') {
-						const orderId = this.getNodeParameter('orderId', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/cancel_order/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: baseParams.toString(),
+          };
 
-						const body: IDataObject = { id: orderId };
-						if (additionalFields.omit_transactions) {
-							body.omit_transactions = additionalFields.omit_transactions;
-						}
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
 
-						responseData = await bitstampApiRequest.call(this, 'POST', 'order_status', body);
-					} else {
-						throw new Error(`Unknown operation: ${operation}`);
-					}
-				}
+        case 'cancelAllOrders': {
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/cancel_all_orders/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: baseParams.toString(),
+          };
 
-				// Withdrawal Resource
-				else if (resource === 'withdrawal') {
-					if (operation === 'getWithdrawalRequests') {
-						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
 
-						const body: IDataObject = {};
-						if (additionalFields.offset) {
-							body.offset = additionalFields.offset;
-						}
-						if (additionalFields.timedelta) {
-							body.timedelta = additionalFields.timedelta;
-						}
+        case 'getOpenOrders': {
+          const pair = this.getNodeParameter('pair', i) as string;
 
-						if (returnAll) {
-							responseData = await bitstampApiRequestAllItems.call(
-								this,
-								'POST',
-								'withdrawal-requests',
-								body,
-							);
-						} else {
-							const limit = this.getNodeParameter('limit', i) as number;
-							body.limit = limit;
-							responseData = await bitstampApiRequest.call(
-								this,
-								'POST',
-								'withdrawal-requests',
-								body,
-							);
-						}
-					} else if (operation === 'withdrawBitcoin') {
-						const amount = this.getNodeParameter('amount', i) as string;
-						const address = this.getNodeParameter('address', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+          const options: any = {
+            method: 'POST',
+            url: `https://www.bitstamp.net/api/v2/open_orders/${pair}/`,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: baseParams.toString(),
+          };
 
-						const body: IDataObject = { amount, address };
-						if (additionalFields.instant) {
-							body.instant = additionalFields.instant ? 1 : 0;
-						}
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
 
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							'bitcoin_withdrawal',
-							body,
-						);
-					} else if (operation === 'withdrawLitecoin') {
-						const amount = this.getNodeParameter('amount', i) as string;
-						const address = this.getNodeParameter('address', i) as string;
+        case 'getOrderStatus': {
+          const orderId = this.getNodeParameter('orderId', i) as string;
 
-						responseData = await bitstampApiRequest.call(this, 'POST', 'ltc_withdrawal', {
-							amount,
-							address,
-						});
-					} else if (operation === 'withdrawEthereum') {
-						const amount = this.getNodeParameter('amount', i) as string;
-						const address = this.getNodeParameter('address', i) as string;
+          baseParams.append('id', orderId);
 
-						responseData = await bitstampApiRequest.call(this, 'POST', 'eth_withdrawal', {
-							amount,
-							address,
-						});
-					} else if (operation === 'withdrawRipple') {
-						const amount = this.getNodeParameter('amount', i) as string;
-						const address = this.getNodeParameter('address', i) as string;
-						const destinationTag = this.getNodeParameter('destinationTag', i, '') as string;
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/order_status/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: baseParams.toString(),
+          };
 
-						const body: IDataObject = { amount, address };
-						if (destinationTag) {
-							body.destination_tag = destinationTag;
-						}
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
 
-						responseData = await bitstampApiRequest.call(this, 'POST', 'xrp_withdrawal', body);
-					} else if (operation === 'withdrawCrypto') {
-						const currency = this.getNodeParameter('currency', i) as string;
-						const amount = this.getNodeParameter('amount', i) as string;
-						const address = this.getNodeParameter('address', i) as string;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+        default:
+          throw new NodeOperationError(this.getNode(), `Unknown operation: ${operation}`);
+      }
 
-						const body: IDataObject = { amount, address };
-						if (additionalFields.destination_tag) {
-							body.destination_tag = additionalFields.destination_tag;
-						}
-						if (additionalFields.network) {
-							body.network = additionalFields.network;
-						}
+      returnData.push({ json: result, pairedItem: { item: i } });
+    } catch (error: any) {
+      if (this.continueOnFail()) {
+        returnData.push({ json: { error: error.message }, pairedItem: { item: i } });
+      } else {
+        if (error.response && error.response.body) {
+          throw new NodeApiError(this.getNode(), error.response.body as any);
+        }
+        throw new NodeOperationError(this.getNode(), error.message);
+      }
+    }
+  }
 
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							`${currency}_withdrawal`,
-							body,
-						);
-					} else if (operation === 'cancelWithdrawal') {
-						const withdrawalId = this.getNodeParameter('withdrawalId', i) as string;
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							'withdrawal_cancel',
-							{ id: withdrawalId },
-						);
-					} else {
-						throw new Error(`Unknown operation: ${operation}`);
-					}
-				}
+  return returnData;
+}
 
-				// Deposit Resource
-				else if (resource === 'deposit') {
-					if (operation === 'getBitcoinDepositAddress') {
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							'bitcoin_deposit_address',
-						);
-					} else if (operation === 'getLitecoinDepositAddress') {
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							'ltc_address',
-						);
-					} else if (operation === 'getEthereumDepositAddress') {
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							'eth_address',
-						);
-					} else if (operation === 'getCryptoDepositAddress') {
-						const currency = this.getNodeParameter('currency', i) as string;
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							`${currency}_address`,
-						);
-					} else if (operation === 'getUnconfirmedDeposits') {
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
-						const body: IDataObject = {};
+function generateNonce(): string {
+  return Date.now().toString();
+}
 
-						if (additionalFields.currency) {
-							body.currency = additionalFields.currency;
-						}
+function createSignature(nonce: string, customerId: string, apiKey: string, secret: string): string {
+  const message = nonce + customerId + apiKey;
+  return crypto.createHmac('sha256', secret).update(message).digest('hex').toUpperCase();
+}
 
-						responseData = await bitstampApiRequest.call(
-							this,
-							'POST',
-							'unconfirmed_btc',
-							body,
-						);
-					} else {
-						throw new Error(`Unknown operation: ${operation}`);
-					}
-				}
+async function executeAccountOperations(
+  this: IExecuteFunctions,
+  items: INodeExecutionData[],
+): Promise<INodeExecutionData[]> {
+  const returnData: INodeExecutionData[] = [];
+  const operation = this.getNodeParameter('operation', 0) as string;
+  const credentials = await this.getCredentials('bitstampApi') as any;
 
-				// Staking Resource
-				else if (resource === 'staking') {
-					if (operation === 'getStakingInfo') {
-						responseData = await bitstampApiRequest.call(this, 'POST', 'earn/subscriptions');
-					} else if (operation === 'stake') {
-						const currency = this.getNodeParameter('currency', i) as string;
-						const amount = this.getNodeParameter('amount', i) as string;
+  for (let i = 0; i < items.length; i++) {
+    try {
+      let result: any;
+      
+      const nonce = generateNonce();
+      const signature = createSignature(nonce, credentials.customerId, credentials.apiKey, credentials.secret);
+      
+      const baseData = {
+        key: credentials.apiKey,
+        signature: signature,
+        nonce: nonce,
+      };
 
-						responseData = await bitstampApiRequest.call(this, 'POST', 'earn/subscribe', {
-							currency,
-							amount,
-						});
-					} else if (operation === 'unstake') {
-						const currency = this.getNodeParameter('currency', i) as string;
-						const amount = this.getNodeParameter('amount', i) as string;
+      switch (operation) {
+        case 'getBalance': {
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/balance/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: baseData,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getPairBalance': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          const options: any = {
+            method: 'POST',
+            url: `https://www.bitstamp.net/api/v2/balance/${pair}/`,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: baseData,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getUserTransactions': {
+          const offset = this.getNodeParameter('offset', i, 0) as number;
+          const limit = this.getNodeParameter('limit', i, 100) as number;
+          const sort = this.getNodeParameter('sort', i, 'desc') as string;
+          
+          const formData = {
+            ...baseData,
+            offset: offset.toString(),
+            limit: limit.toString(),
+            sort: sort,
+          };
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/user_transactions/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: formData,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getPairTransactions': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          const offset = this.getNodeParameter('offset', i, 0) as number;
+          const limit = this.getNodeParameter('limit', i, 100) as number;
+          const sort = this.getNodeParameter('sort', i, 'desc') as string;
+          
+          const formData = {
+            ...baseData,
+            offset: offset.toString(),
+            limit: limit.toString(),
+            sort: sort,
+          };
+          
+          const options: any = {
+            method: 'POST',
+            url: `https://www.bitstamp.net/api/v2/user_transactions/${pair}/`,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: formData,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getTradingFees': {
+          const pair = this.getNodeParameter('pair', i) as string;
+          const options: any = {
+            method: 'POST',
+            url: `https://www.bitstamp.net/api/v2/trading-fees/${pair}/`,
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: baseData,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        default:
+          throw new NodeOperationError(this.getNode(), `Unknown operation: ${operation}`);
+      }
 
-						responseData = await bitstampApiRequest.call(this, 'POST', 'earn/unsubscribe', {
-							currency,
-							amount,
-						});
-					} else if (operation === 'getStakingTransactions') {
-						const returnAll = this.getNodeParameter('returnAll', i) as boolean;
-						const additionalFields = this.getNodeParameter('additionalFields', i) as IDataObject;
+      returnData.push({
+        json: result,
+        pairedItem: { item: i },
+      });
 
-						const body: IDataObject = {};
-						if (additionalFields.currency) {
-							body.currency = additionalFields.currency;
-						}
-						if (additionalFields.offset) {
-							body.offset = additionalFields.offset;
-						}
-						if (additionalFields.sort) {
-							body.sort = additionalFields.sort;
-						}
+    } catch (error: any) {
+      if (this.continueOnFail()) {
+        returnData.push({
+          json: { error: error.message },
+          pairedItem: { item: i },
+        });
+      } else {
+        throw new NodeApiError(this.getNode(), error);
+      }
+    }
+  }
 
-						if (returnAll) {
-							responseData = await bitstampApiRequestAllItems.call(
-								this,
-								'POST',
-								'earn/transactions',
-								body,
-							);
-						} else {
-							const limit = this.getNodeParameter('limit', i) as number;
-							body.limit = limit;
-							responseData = await bitstampApiRequest.call(
-								this,
-								'POST',
-								'earn/transactions',
-								body,
-							);
-						}
-					} else if (operation === 'getStakingBalance') {
-						const currency = this.getNodeParameter('currency', i) as string;
-						responseData = await bitstampApiRequest.call(this, 'POST', 'earn/balances', {
-							currency,
-						});
-					} else {
-						throw new Error(`Unknown operation: ${operation}`);
-					}
-				} else {
-					throw new Error(`Unknown resource: ${resource}`);
-				}
+  return returnData;
+}
 
-				// Build return data
-				if (Array.isArray(responseData)) {
-					for (const item of responseData) {
-						returnData.push({
-							json: item,
-							pairedItem: { item: i },
-						});
-					}
-				} else {
-					returnData.push({
-						json: responseData,
-						pairedItem: { item: i },
-					});
-				}
-			} catch (error) {
-				if (this.continueOnFail()) {
-					returnData.push({
-						json: {
-							error: (error as Error).message,
-						},
-						pairedItem: { item: i },
-					});
-					continue;
-				}
-				throw error;
-			}
-		}
+function createSignature(apiSecret: string, nonce: string, customerId: string, apiKey: string, postData: string): string {
+  const crypto = require('crypto');
+  const message = nonce + customerId + apiKey + postData;
+  return crypto.createHmac('sha256', apiSecret).update(message).digest('hex').toUpperCase();
+}
 
-		return [returnData];
-	}
+async function executeWithdrawalsOperations(
+  this: IExecuteFunctions,
+  items: INodeExecutionData[],
+): Promise<INodeExecutionData[]> {
+  const returnData: INodeExecutionData[] = [];
+  const operation = this.getNodeParameter('operation', 0) as string;
+  const credentials = await this.getCredentials('bitstampApi') as any;
+
+  for (let i = 0; i < items.length; i++) {
+    try {
+      let result: any;
+      const nonce = Date.now().toString();
+      
+      switch (operation) {
+        case 'getWithdrawalRequests': {
+          const timedelta = this.getNodeParameter('timedelta', i) as number;
+          const postData = `key=${credentials.apiKey}&signature=${createSignature(credentials.apiSecret, nonce, credentials.customerId, credentials.apiKey, '')}&nonce=${nonce}&timedelta=${timedelta}`;
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/withdrawal-requests/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: postData,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getOpenWithdrawals': {
+          const postData = `key=${credentials.apiKey}&signature=${createSignature(credentials.apiSecret, nonce, credentials.customerId, credentials.apiKey, '')}&nonce=${nonce}`;
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/withdrawal/open/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: postData,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getWithdrawalStatus': {
+          const id = this.getNodeParameter('id', i) as string;
+          const postData = `key=${credentials.apiKey}&signature=${createSignature(credentials.apiSecret, nonce, credentials.customerId, credentials.apiKey, '')}&nonce=${nonce}&id=${id}`;
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/withdrawal/status/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: postData,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'cancelWithdrawal': {
+          const id = this.getNodeParameter('id', i) as string;
+          const postData = `key=${credentials.apiKey}&signature=${createSignature(credentials.apiSecret, nonce, credentials.customerId, credentials.apiKey, '')}&nonce=${nonce}&id=${id}`;
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/withdrawal/cancel/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: postData,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'withdrawBitcoin': {
+          const amount = this.getNodeParameter('amount', i) as string;
+          const address = this.getNodeParameter('address', i) as string;
+          const instant = this.getNodeParameter('instant', i) as boolean;
+          const postData = `key=${credentials.apiKey}&signature=${createSignature(credentials.apiSecret, nonce, credentials.customerId, credentials.apiKey, '')}&nonce=${nonce}&amount=${amount}&address=${address}&instant=${instant ? '1' : '0'}`;
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/btc_withdrawal/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: postData,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'withdrawLitecoin': {
+          const amount = this.getNodeParameter('amount', i) as string;
+          const address = this.getNodeParameter('address', i) as string;
+          const postData = `key=${credentials.apiKey}&signature=${createSignature(credentials.apiSecret, nonce, credentials.customerId, credentials.apiKey, '')}&nonce=${nonce}&amount=${amount}&address=${address}`;
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/ltc_withdrawal/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: postData,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'withdrawEthereum': {
+          const amount = this.getNodeParameter('amount', i) as string;
+          const address = this.getNodeParameter('address', i) as string;
+          const postData = `key=${credentials.apiKey}&signature=${createSignature(credentials.apiSecret, nonce, credentials.customerId, credentials.apiKey, '')}&nonce=${nonce}&amount=${amount}&address=${address}`;
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/eth_withdrawal/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: postData,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'withdrawFiat': {
+          const amount = this.getNodeParameter('amount', i) as string;
+          const account_currency = this.getNodeParameter('account_currency', i) as string;
+          const name = this.getNodeParameter('name', i) as string;
+          const iban = this.getNodeParameter('iban', i) as string;
+          const bic = this.getNodeParameter('bic', i) as string;
+          const postData = `key=${credentials.apiKey}&signature=${createSignature(credentials.apiSecret, nonce, credentials.customerId, credentials.apiKey, '')}&nonce=${nonce}&amount=${amount}&account_currency=${account_currency}&name=${name}&iban=${iban}&bic=${bic}`;
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/bank_withdrawal/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: postData,
+          };
+          
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        default:
+          throw new NodeOperationError(this.getNode(), `Unknown operation: ${operation}`);
+      }
+      
+      returnData.push({ json: result, pairedItem: { item: i } });
+    } catch (error: any) {
+      if (this.continueOnFail()) {
+        returnData.push({ json: { error: error.message }, pairedItem: { item: i } });
+      } else {
+        throw new NodeApiError(this.getNode(), error);
+      }
+    }
+  }
+  
+  return returnData;
+}
+
+async function executeDepositsOperations(
+  this: IExecuteFunctions,
+  items: INodeExecutionData[],
+): Promise<INodeExecutionData[]> {
+  const returnData: INodeExecutionData[] = [];
+  const operation = this.getNodeParameter('operation', 0) as string;
+  const credentials = await this.getCredentials('bitstampApi') as any;
+
+  for (let i = 0; i < items.length; i++) {
+    try {
+      let result: any;
+      
+      switch (operation) {
+        case 'getBitcoinAddress': {
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/btc_address/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: createAuthenticatedPayload(credentials, {}),
+            json: true,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getLitecoinAddress': {
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/ltc_address/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: createAuthenticatedPayload(credentials, {}),
+            json: true,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getEthereumAddress': {
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/eth_address/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: createAuthenticatedPayload(credentials, {}),
+            json: true,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'getRippleAddress': {
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/xrp_address/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: createAuthenticatedPayload(credentials, {}),
+            json: true,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'transferToMain': {
+          const amount = this.getNodeParameter('amount', i) as string;
+          const currency = this.getNodeParameter('currency', i) as string;
+          const subaccount = this.getNodeParameter('subaccount', i) as string;
+          
+          const payload: any = {
+            amount,
+            currency,
+            subaccount,
+          };
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/transfer-to-main/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: createAuthenticatedPayload(credentials, payload),
+            json: true,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        case 'transferFromMain': {
+          const amount = this.getNodeParameter('amount', i) as string;
+          const currency = this.getNodeParameter('currency', i) as string;
+          const subaccount = this.getNodeParameter('subaccount', i) as string;
+          
+          const payload: any = {
+            amount,
+            currency,
+            subaccount,
+          };
+          
+          const options: any = {
+            method: 'POST',
+            url: 'https://www.bitstamp.net/api/v2/transfer-from-main/',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            form: createAuthenticatedPayload(credentials, payload),
+            json: true,
+          };
+          result = await this.helpers.httpRequest(options) as any;
+          break;
+        }
+        
+        default:
+          throw new NodeOperationError(this.getNode(), `Unknown operation: ${operation}`);
+      }
+      
+      returnData.push({ json: result, pairedItem: { item: i } });
+    } catch (error: any) {
+      if (this.continueOnFail()) {
+        returnData.push({ json: { error: error.message }, pairedItem: { item: i } });
+      } else {
+        if (error.response?.body) {
+          throw new NodeApiError(this.getNode(), error.response.body, { itemIndex: i });
+        }
+        throw new NodeOperationError(this.getNode(), error.message, { itemIndex: i });
+      }
+    }
+  }
+  
+  return returnData;
+}
+
+function createAuthenticatedPayload(credentials: any, payload: any): any {
+  const crypto = require('crypto');
+  const nonce = Date.now().toString();
+  
+  const message = nonce + credentials.customerId + credentials.apiKey;
+  const signature = crypto
+    .createHmac('sha256', credentials.apiSecret)
+    .update(message)
+    .digest('hex')
+    .toUpperCase();
+  
+  return {
+    key: credentials.apiKey,
+    signature,
+    nonce,
+    ...payload,
+  };
 }
