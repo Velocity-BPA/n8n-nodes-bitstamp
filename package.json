@@ -1,87 +1,57 @@
 {
-  "name": "n8n-nodes-bitstamp",
+  "name": "@velocity-bpa/n8n-nodes-bitstamp",
   "version": "1.0.0",
-  "description": "A comprehensive n8n community node for Bitstamp cryptocurrency exchange providing 6 resources and 40+ operations for trading, account management, market data, deposits, withdrawals, and staking.",
-  "license": "BUSL-1.1",
-  "author": {
-    "name": "Velocity BPA",
-    "email": "licensing@velobpa.com",
-    "url": "https://velobpa.com"
+  "description": "n8n community node for Bitstamp",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "main": "dist/nodes/Bitstamp/Bitstamp.node.js",
+  "engines": {
+    "node": ">=18.0.0"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Velocity-BPA/n8n-nodes-bitstamp.git"
+  "packageManager": "pnpm@9.1.4",
+  "files": [
+    "dist/**/*"
+  ],
+  "scripts": {
+    "build": "tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "lint": "eslint nodes credentials package.json",
+    "lintfix": "eslint nodes credentials package.json --fix",
+    "format": "prettier nodes credentials --write",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "prepublishOnly": "npm run build"
   },
-  "homepage": "https://github.com/Velocity-BPA/n8n-nodes-bitstamp",
-  "bugs": {
-    "url": "https://github.com/Velocity-BPA/n8n-nodes-bitstamp/issues"
+  "dependencies": {
+    "crypto": "^1.0.1",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.5",
+    "@types/node": "^20.8.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.50.0",
+    "gulp": "^4.0.2",
+    "jest": "^29.7.0",
+    "n8n-workflow": "*",
+    "prettier": "^3.0.3",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.2.2"
+  },
+  "peerDependencies": {
+    "n8n-workflow": "*"
   },
   "keywords": [
     "n8n",
     "n8n-community-node-package",
     "bitstamp",
     "cryptocurrency",
-    "exchange",
     "trading",
-    "crypto",
-    "bitcoin",
-    "ethereum",
-    "staking",
-    "automation",
-    "workflow"
+    "api"
   ],
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "files": [
-    "dist",
-    "LICENSE",
-    "COMMERCIAL_LICENSE.md",
-    "LICENSING_FAQ.md",
-    "README.md"
-  ],
-  "n8n": {
-    "n8nNodesApiVersion": 1,
-    "credentials": [
-      "dist/credentials/BitstampApi.credentials.js"
-    ],
-    "nodes": [
-      "dist/nodes/Bitstamp/Bitstamp.node.js"
-    ]
-  },
-  "scripts": {
-    "build": "tsc && npm run copy-icons",
-    "copy-icons": "cp -r nodes/Bitstamp/*.svg dist/nodes/Bitstamp/ 2>/dev/null || true",
-    "dev": "tsc --watch",
-    "lint": "eslint . --ext .ts",
-    "lint:fix": "eslint . --ext .ts --fix",
-    "format": "prettier --write \"**/*.ts\"",
-    "format:check": "prettier --check \"**/*.ts\"",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage",
-    "prepublishOnly": "npm run build",
-    "clean": "rm -rf dist",
-    "rebuild": "npm run clean && npm run build"
-  },
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "dependencies": {},
-  "peerDependencies": {
-    "n8n-workflow": "*"
-  },
-  "devDependencies": {
-    "@types/jest": "^29.5.12",
-    "@types/node": "^20.11.24",
-    "@typescript-eslint/eslint-plugin": "^7.1.0",
-    "@typescript-eslint/parser": "^7.1.0",
-    "eslint": "^8.57.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-n8n-nodes-base": "^1.16.1",
-    "jest": "^29.7.0",
-    "n8n-workflow": "*",
-    "prettier": "^3.2.5",
-    "ts-jest": "^29.1.2",
-    "typescript": "^5.3.3"
+  "author": "Velocity BPA",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/velocity-bpa/n8n-nodes-bitstamp.git"
   }
 }
