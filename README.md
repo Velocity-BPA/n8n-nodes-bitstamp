@@ -8,21 +8,25 @@
 >
 > For licensing information, visit https://velobpa.com/licensing or contact licensing@velobpa.com.
 
-A comprehensive n8n community node for **Bitstamp**, one of the world's oldest and most trusted cryptocurrency exchanges. Founded in 2011 in Luxembourg, Bitstamp supports trading of 80+ cryptocurrencies with spot trading, staking, and lending services. This node enables workflow automation for trading, account management, market data access, and crypto operations.
+This n8n community node provides comprehensive integration with Bitstamp's cryptocurrency trading platform, implementing 5 core resources with full trading, account management, and transaction capabilities for automated crypto trading workflows.
 
-![n8n](https://img.shields.io/badge/n8n-community--node-orange)
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
+![n8n Community Node](https://img.shields.io/badge/n8n-Community%20Node-blue)
 ![License](https://img.shields.io/badge/license-BSL--1.1-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue)
+![Bitstamp API](https://img.shields.io/badge/Bitstamp-API%20v2-orange)
+![Crypto Trading](https://img.shields.io/badge/Crypto-Trading-gold)
+![Real-time](https://img.shields.io/badge/Real--time-Data-green)
 
 ## Features
 
-- **Account Management**: View balances, transaction history, trading fees, and account information
-- **Market Data**: Access real-time tickers, order books, OHLC data, and trading pairs (public API)
-- **Trading**: Place limit, market, and instant orders; manage and cancel orders
-- **Withdrawals**: Withdraw BTC, ETH, LTC, XRP, and 15+ other cryptocurrencies
-- **Deposits**: Get deposit addresses for all supported cryptocurrencies
-- **Staking**: Stake/unstake crypto, view staking balances and transaction history
+- **Trading Pairs Management** - Retrieve market data, ticker information, and trading pair details
+- **Order Management** - Place, cancel, modify, and track buy/sell orders with full lifecycle support
+- **Account Operations** - Access balance information, trading fees, and account status
+- **Withdrawal Processing** - Initiate and monitor cryptocurrency and fiat withdrawals
+- **Deposit Tracking** - Monitor incoming deposits and generate deposit addresses
+- **Real-time Market Data** - Access live pricing, order books, and trading volumes
+- **Multi-Currency Support** - Handle major cryptocurrencies and fiat currency pairs
+- **Risk Management** - Built-in validation and error handling for trading operations
 
 ## Installation
 
@@ -30,267 +34,152 @@ A comprehensive n8n community node for **Bitstamp**, one of the world's oldest a
 
 1. Open n8n
 2. Go to **Settings** → **Community Nodes**
-3. Click **Install**
+3. Click **Install a community node**
 4. Enter `n8n-nodes-bitstamp`
 5. Click **Install**
 
 ### Manual Installation
 
 ```bash
-# Navigate to your n8n custom nodes directory
-cd ~/.n8n/custom
-
-# Install the package
+cd ~/.n8n
 npm install n8n-nodes-bitstamp
 ```
 
 ### Development Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/Velocity-BPA/n8n-nodes-bitstamp.git
 cd n8n-nodes-bitstamp
-
-# Install dependencies
 npm install
-
-# Build the project
 npm run build
-
-# Create symlink to n8n custom nodes directory
 mkdir -p ~/.n8n/custom
 ln -s $(pwd) ~/.n8n/custom/n8n-nodes-bitstamp
-
-# Restart n8n
 n8n start
 ```
 
 ## Credentials Setup
 
-To use this node, you need to create API credentials on Bitstamp:
-
-1. Log in to your Bitstamp account
-2. Go to **Account** → **Security** → **API Access**
-3. Click **Create New API Key**
-4. Configure permissions (enable the operations you need)
-5. Save your API Key, API Secret, and note your Customer ID
-
-| Field | Description |
-|-------|-------------|
-| API Key | Your Bitstamp API key |
-| API Secret | Your Bitstamp API secret (keep secure) |
-| Client ID | Your Bitstamp customer/user ID |
+| Field | Description | Required |
+|-------|-------------|----------|
+| API Key | Your Bitstamp API key from account settings | Yes |
+| API Secret | Your Bitstamp API secret key | Yes |
+| Customer ID | Your Bitstamp customer ID (username) | Yes |
+| Environment | API environment (Live/Sandbox) | Yes |
 
 ## Resources & Operations
 
-### Account
+### 1. Trading Pairs
 
 | Operation | Description |
 |-----------|-------------|
-| Get Balance | Get balance for all currencies |
-| Get Balance by Currency | Get balance for a specific currency |
-| Get User Transactions | Get transaction history with pagination |
-| Get All Fees | Get all trading fees |
-| Get Fee by Market | Get fee for a specific trading pair |
-| Get Account Info | Get account information |
+| Get All | Retrieve all available trading pairs |
+| Get Ticker | Get current ticker information for specific pair |
+| Get Order Book | Fetch current order book data |
+| Get Transactions | Retrieve recent transactions for a trading pair |
+| Get OHLC Data | Get historical OHLC (candlestick) data |
 
-### Market Data (Public - No Authentication Required)
-
-| Operation | Description |
-|-----------|-------------|
-| Get Ticker | Current ticker for trading pair |
-| Get Hourly Ticker | Hourly ticker data |
-| Get Order Book | Full order book with optional grouping |
-| Get Transactions | Recent public trades |
-| Get OHLC | Candlestick/OHLC data with customizable timeframes |
-| Get Trading Pairs | List all available trading pairs |
-| Get EUR/USD Rate | EUR/USD conversion rate |
-
-### Trading
+### 2. Orders
 
 | Operation | Description |
 |-----------|-------------|
-| Place Buy Limit Order | Place a limit buy order |
-| Place Sell Limit Order | Place a limit sell order |
-| Place Buy Market Order | Place a market buy order |
-| Place Sell Market Order | Place a market sell order |
-| Place Buy Instant Order | Place an instant buy order |
-| Place Sell Instant Order | Place an instant sell order |
-| Cancel Order | Cancel an order by ID |
-| Cancel All Orders | Cancel all open orders |
-| Get Open Orders | List all open orders |
-| Get Order Status | Get order status and details |
+| Place Buy Order | Create a new buy order (market/limit) |
+| Place Sell Order | Create a new sell order (market/limit) |
+| Cancel Order | Cancel an existing order by ID |
+| Get Order Status | Check the status of a specific order |
+| Get Open Orders | Retrieve all currently open orders |
+| Get Order History | Get historical order data |
+| Cancel All Orders | Cancel all open orders for account |
 
-### Withdrawal
+### 3. Account
 
 | Operation | Description |
 |-----------|-------------|
-| Get Withdrawal Requests | List withdrawal history |
-| Withdraw Bitcoin | Withdraw BTC |
-| Withdraw Litecoin | Withdraw LTC |
-| Withdraw Ethereum | Withdraw ETH |
-| Withdraw Ripple | Withdraw XRP (with destination tag support) |
-| Withdraw Crypto | Withdraw any supported cryptocurrency |
-| Cancel Withdrawal | Cancel a pending withdrawal |
+| Get Balance | Retrieve current account balances |
+| Get Trading Fees | Get current trading fee structure |
+| Get Account Info | Fetch general account information |
+| Get User Transactions | Retrieve account transaction history |
+| Get API Permissions | Check current API key permissions |
 
-### Deposit
+### 4. Withdrawals
 
 | Operation | Description |
 |-----------|-------------|
-| Get Bitcoin Deposit Address | Get BTC deposit address |
-| Get Litecoin Deposit Address | Get LTC deposit address |
-| Get Ethereum Deposit Address | Get ETH deposit address |
-| Get Crypto Deposit Address | Get deposit address for any crypto |
-| Get Unconfirmed Deposits | List pending deposits |
+| Create Withdrawal | Initiate a cryptocurrency or fiat withdrawal |
+| Get Withdrawal Status | Check status of specific withdrawal |
+| Get Withdrawal History | Retrieve withdrawal transaction history |
+| Cancel Withdrawal | Cancel a pending withdrawal request |
+| Get Withdrawal Fees | Get current withdrawal fee schedule |
 
-### Staking
+### 5. Deposits
 
 | Operation | Description |
 |-----------|-------------|
-| Get Staking Info | Get staking rates and information |
-| Stake | Stake cryptocurrency |
-| Unstake | Unstake cryptocurrency |
-| Get Staking Transactions | List staking history |
-| Get Staking Balance | Get staked balance |
+| Get Deposit Address | Generate or retrieve deposit address for cryptocurrency |
+| Get Deposit History | Retrieve deposit transaction history |
+| Get Deposit Status | Check status of specific deposit |
+| Create Deposit Request | Initiate a fiat deposit request |
 
 ## Usage Examples
 
-### Get BTC/USD Ticker
-
 ```javascript
-// Configure the node:
-// Resource: Market Data
-// Operation: Get Ticker
-// Currency Pair: BTC/USD
-
-// Output:
+// Get Bitcoin/USD ticker information
 {
-  "high": "43500.00",
-  "last": "43250.00",
-  "timestamp": "1704067200",
-  "bid": "43240.00",
-  "vwap": "43150.00",
-  "volume": "1234.56789012",
-  "low": "42800.00",
-  "ask": "43260.00",
-  "open": "43000.00"
+  "resource": "tradingPairs",
+  "operation": "getTicker",
+  "pair": "btcusd"
 }
 ```
 
-### Place a Limit Buy Order
-
 ```javascript
-// Configure the node:
-// Resource: Trading
-// Operation: Place Buy Limit Order
-// Currency Pair: BTC/USD
-// Amount: "0.001"
-// Price: "42000.00"
-
-// Output:
+// Place a limit buy order for Ethereum
 {
-  "id": "12345678",
-  "datetime": "2024-01-01 12:00:00",
-  "type": "0",
-  "price": "42000.00",
-  "amount": "0.001"
+  "resource": "orders",
+  "operation": "placeBuyOrder",
+  "pair": "ethusd",
+  "amount": "0.5",
+  "price": "2000.00",
+  "type": "limit"
 }
 ```
 
-### Get Account Balance
-
 ```javascript
-// Configure the node:
-// Resource: Account
-// Operation: Get Balance
-
-// Output:
+// Check account balances
 {
-  "btc_balance": "1.23456789",
-  "btc_available": "1.20000000",
-  "btc_reserved": "0.03456789",
-  "usd_balance": "10000.00",
-  "usd_available": "9500.00",
-  "usd_reserved": "500.00",
-  // ... more currencies
+  "resource": "account",
+  "operation": "getBalance"
 }
 ```
 
-## Supported Trading Pairs
-
-Bitstamp supports 80+ trading pairs including:
-
-- **Major pairs**: BTC/USD, BTC/EUR, ETH/USD, ETH/EUR, ETH/BTC
-- **Stablecoins**: USDC/USD, USDT/USD, DAI/USD
-- **Altcoins**: SOL/USD, LINK/USD, MATIC/USD, UNI/USD, AAVE/USD
-
-## OHLC Timeframes
-
-Available timeframes for candlestick data:
-
-| Timeframe | Value (seconds) |
-|-----------|-----------------|
-| 1 Minute | 60 |
-| 3 Minutes | 180 |
-| 5 Minutes | 300 |
-| 15 Minutes | 900 |
-| 30 Minutes | 1800 |
-| 1 Hour | 3600 |
-| 2 Hours | 7200 |
-| 4 Hours | 14400 |
-| 6 Hours | 21600 |
-| 12 Hours | 43200 |
-| 1 Day | 86400 |
-| 3 Days | 259200 |
+```javascript
+// Initiate Bitcoin withdrawal
+{
+  "resource": "withdrawals",
+  "operation": "createWithdrawal",
+  "currency": "btc",
+  "amount": "0.001",
+  "address": "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"
+}
+```
 
 ## Error Handling
 
-The node handles Bitstamp-specific errors gracefully:
-
-- **Invalid signature**: Check that your API credentials are correct
-- **Missing key**: Ensure API key is provided
-- **Invalid nonce**: Nonce must be incrementing (automatically handled)
-- **API key not found**: Invalid API key
-- **No permission**: Insufficient API permissions for the operation
-
-Note: Bitstamp returns HTTP 200 even for errors - the node checks the response body for error status.
-
-## Security Best Practices
-
-1. **Never share your API secret** - Keep it secure and don't commit it to version control
-2. **Use environment variables** - Store credentials in n8n's credential store
-3. **Limit API permissions** - Only enable the operations you need
-4. **Enable IP whitelisting** - Restrict API access to specific IPs if possible
-5. **Monitor API usage** - Regularly check your API activity on Bitstamp
-6. **Use separate API keys** - Create different keys for different workflows
-
-## Rate Limits
-
-Bitstamp allows up to 400 requests per second. The node handles rate limiting gracefully, but consider adding delays between operations in high-frequency workflows.
+| Error | Description | Solution |
+|-------|-------------|----------|
+| Invalid API Credentials | API key, secret, or customer ID is incorrect | Verify credentials in Bitstamp account settings |
+| Insufficient Balance | Not enough funds for the requested operation | Check account balance before placing orders |
+| Invalid Trading Pair | Specified trading pair doesn't exist or isn't active | Use valid trading pair symbols (e.g., 'btcusd') |
+| Rate Limit Exceeded | Too many API requests in short time period | Implement delays between requests or reduce frequency |
+| Order Not Found | Attempting to access non-existent order | Verify order ID exists and belongs to your account |
+| Minimum Order Size | Order amount below minimum threshold | Check minimum order requirements for trading pair |
 
 ## Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Build
 npm run build
-
-# Run tests
 npm test
-
-# Run tests with coverage
-npm run test:coverage
-
-# Lint
 npm run lint
-
-# Fix linting issues
-npm run lint:fix
-
-# Format code
-npm run format
+npm run dev
 ```
 
 ## Author
@@ -298,7 +187,6 @@ npm run format
 **Velocity BPA**
 - Website: [velobpa.com](https://velobpa.com)
 - GitHub: [Velocity-BPA](https://github.com/Velocity-BPA)
-- Email: licensing@velobpa.com
 
 ## Licensing
 
@@ -308,32 +196,24 @@ This n8n community node is licensed under the **Business Source License 1.1**.
 Permitted for personal, educational, research, and internal business use.
 
 ### Commercial Use
-Use of this node within any SaaS, PaaS, hosted platform, managed service,
-or paid automation offering requires a commercial license.
+Use of this node within any SaaS, PaaS, hosted platform, managed service, or paid automation offering requires a commercial license.
 
-For licensing inquiries:
-**licensing@velobpa.com**
+For licensing inquiries: **licensing@velobpa.com**
 
 See [LICENSE](LICENSE), [COMMERCIAL_LICENSE.md](COMMERCIAL_LICENSE.md), and [LICENSING_FAQ.md](LICENSING_FAQ.md) for details.
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Contributions are welcome! Please ensure:
 
-Please ensure your code follows the existing style and includes appropriate tests.
+1. Code follows existing style conventions
+2. All tests pass (`npm test`)
+3. Linting passes (`npm run lint`)
+4. Documentation is updated for new features
+5. Commit messages are descriptive
 
 ## Support
 
-- **Documentation**: [Bitstamp API Docs](https://www.bitstamp.net/api/)
 - **Issues**: [GitHub Issues](https://github.com/Velocity-BPA/n8n-nodes-bitstamp/issues)
-- **n8n Community**: [n8n Community Forum](https://community.n8n.io/)
-
-## Acknowledgments
-
-- [Bitstamp](https://www.bitstamp.net/) for providing a robust cryptocurrency exchange API
-- [n8n](https://n8n.io/) for the excellent workflow automation platform
-- The n8n community for inspiration and support
+- **Bitstamp API Documentation**: [https://www.bitstamp.net/api/](https://www.bitstamp.net/api/)
+- **Bitstamp Support**: [https://www.bitstamp.net/help/](https://www.bitstamp.net/help/)
