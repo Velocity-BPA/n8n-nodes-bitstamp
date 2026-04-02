@@ -33,20 +33,20 @@ describe('Bitstamp Node', () => {
       expect(node.description.outputs).toContain('main');
     });
 
-    it('should define 5 resources', () => {
+    it('should define 6 resources', () => {
       const resourceProp = node.description.properties.find(
         (p: any) => p.name === 'resource'
       );
       expect(resourceProp).toBeDefined();
       expect(resourceProp!.type).toBe('options');
-      expect(resourceProp!.options).toHaveLength(5);
+      expect(resourceProp!.options).toHaveLength(6);
     });
 
     it('should have operation dropdowns for each resource', () => {
       const operations = node.description.properties.filter(
         (p: any) => p.name === 'operation'
       );
-      expect(operations.length).toBe(5);
+      expect(operations.length).toBe(6);
     });
 
     it('should require credentials', () => {
@@ -67,363 +67,106 @@ describe('Bitstamp Node', () => {
   });
 
   // Resource-specific tests
-describe('TradingPairs Resource', () => {
+describe('TradingPair Resource', () => {
   let mockExecuteFunctions: any;
-
+  
   beforeEach(() => {
     mockExecuteFunctions = {
       getNodeParameter: jest.fn(),
       getCredentials: jest.fn().mockResolvedValue({
-        apiKey: 'test-api-key',
-        customerId: 'test-customer-id',
-        apiSecret: 'test-api-secret',
-        baseUrl: 'https://www.bitstamp.net/api/v2',
+        apiKey: 'test-key',
+        apiSecret: 'test-secret',
+        customerId: 'test-customer',
+        baseUrl: 'https://www.bitstamp.net/api/v2'
       }),
       getInputData: jest.fn().mockReturnValue([{ json: {} }]),
       getNode: jest.fn().mockReturnValue({ name: 'Test Node' }),
       continueOnFail: jest.fn().mockReturnValue(false),
       helpers: {
         httpRequest: jest.fn(),
-        requestWithAuthentication: jest.fn(),
-      },
-    };
-  });
-
-  test('should get all trading pairs successfully', async () => {
-    const mockResponse = [
-      {
-        name: 'BTC/USD',
-        url_symbol: 'btcusd',
-        base_decimals: 8,
-        counter_decimals: 2,
-        minimum_order: '25.0 USD',
-        trading: 'Enabled',
-        instant_and_market_orders: 'Enabled',
-        description: 'Bitcoin / U.S. dollar'
+        requestWithAuthentication: jest.fn()
       }
-    ];
-
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      if (param === 'operation') return 'getAllTradingPairs';
-      return undefined;
-    });
-
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const items = [{ json: {} }];
-    const result = await executeTradingPairsOperations.call(mockExecuteFunctions, items);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith({
-      method: 'GET',
-      url: 'https://www.bitstamp.net/api/v2/trading-pairs-info/',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      json: true,
-    });
-  });
-
-  test('should get ticker for specific pair successfully', async () => {
-    const mockResponse = {
-      high: '50000',
-      last: '49500',
-      timestamp: '1640995200',
-      bid: '49400',
-      vwap: '49700',
-      volume: '100.5',
-      low: '48000',
-      ask: '49600',
-      open: '49000'
-    };
-
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      if (param === 'operation') return 'getTicker';
-      if (param === 'pair') return 'btcusd';
-      return undefined;
-    });
-
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const items = [{ json: {} }];
-    const result = await executeTradingPairsOperations.call(mockExecuteFunctions, items);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith({
-      method: 'GET',
-      url: 'https://www.bitstamp.net/api/v2/ticker/btcusd/',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      json: true,
-    });
-  });
-
-  test('should get order book successfully', async () => {
-    const mockResponse = {
-      timestamp: '1640995200',
-      microtimestamp: '1640995200000000',
-      bids: [
-        ['49400', '0.5'],
-        ['49300', '1.2']
-      ],
-      asks: [
-        ['49600', '0.8'],
-        ['49700', '2.1']
-      ]
-    };
-
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      if (param === 'operation') return 'getOrderBook';
-      if (param === 'pair') return 'btcusd';
-      if (param === 'group') return '1';
-      return undefined;
-    });
-
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const items = [{ json: {} }];
-    const result = await executeTradingPairsOperations.call(mockExecuteFunctions, items);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith({
-      method: 'GET',
-      url: 'https://www.bitstamp.net/api/v2/order_book/btcusd/?group=1',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      json: true,
-    });
-  });
-
-  test('should handle API errors gracefully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      if (param === 'operation') return 'getTicker';
-      if (param === 'pair') return 'invalid';
-      return undefined;
-    });
-
-    const error = new Error('API Error: Invalid trading pair');
-    mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(error);
-    mockExecuteFunctions.continueOnFail.mockReturnValue(true);
-
-    const items = [{ json: {} }];
-    const result = await executeTradingPairsOperations.call(mockExecuteFunctions, items);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual({ error: 'API Error: Invalid trading pair' });
-  });
-
-  test('should get transactions successfully', async () => {
-    const mockResponse = [
-      {
-        date: '1640995200',
-        tid: '12345',
-        amount: '0.5',
-        type: '0',
-        price: '49500'
-      }
-    ];
-
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      if (param === 'operation') return 'getTransactions';
-      if (param === 'pair') return 'btcusd';
-      if (param === 'time') return 'hour';
-      return undefined;
-    });
-
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const items = [{ json: {} }];
-    const result = await executeTradingPairsOperations.call(mockExecuteFunctions, items);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith({
-      method: 'GET',
-      url: 'https://www.bitstamp.net/api/v2/transactions/btcusd/?time=hour',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      json: true,
-    });
-  });
-});
-
-describe('Orders Resource', () => {
-  let mockExecuteFunctions: any;
-
-  beforeEach(() => {
-    mockExecuteFunctions = {
-      getNodeParameter: jest.fn(),
-      getCredentials: jest.fn().mockResolvedValue({
-        apiKey: 'test-api-key',
-        apiSecret: 'test-api-secret',
-        clientId: 'test-client-id',
-        baseUrl: 'https://www.bitstamp.net/api/v2',
-      }),
-      getInputData: jest.fn().mockReturnValue([{ json: {} }]),
-      getNode: jest.fn().mockReturnValue({ name: 'Test Node' }),
-      continueOnFail: jest.fn().mockReturnValue(false),
-      helpers: {
-        httpRequest: jest.fn(),
-        requestWithAuthentication: jest.fn(),
-      },
     };
   });
-
-  test('should create buy order successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      const params: any = {
-        operation: 'createBuyOrder',
-        pair: 'btcusd',
-        amount: '0.001',
-        price: '50000',
-        type: 'limit',
-        timeInForce: 'GTC',
-      };
-      return params[param];
+  
+  describe('getTradingPairs operation', () => {
+    it('should get all trading pairs successfully', async () => {
+      const mockResponse = [{ name: 'BTC/USD', url_symbol: 'btcusd' }];
+      mockExecuteFunctions.getNodeParameter.mockReturnValue('getTradingPairs');
+      mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
+      
+      const result = await executeTradingPairOperations.call(mockExecuteFunctions, [{ json: {} }]);
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].json).toEqual(mockResponse);
     });
-
-    const mockResponse = { id: '12345', status: 'Open' };
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeOrdersOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'POST',
-        url: 'https://www.bitstamp.net/api/v2/buy/btcusd/',
-      })
-    );
+    
+    it('should handle getTradingPairs error', async () => {
+      mockExecuteFunctions.getNodeParameter.mockReturnValue('getTradingPairs');
+      mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(new Error('API Error'));
+      mockExecuteFunctions.continueOnFail.mockReturnValue(true);
+      
+      const result = await executeTradingPairOperations.call(mockExecuteFunctions, [{ json: {} }]);
+      
+      expect(result[0].json.error).toBe('API Error');
+    });
   });
-
-  test('should create sell order successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      const params: any = {
-        operation: 'createSellOrder',
-        pair: 'btcusd',
-        amount: '0.001',
-        price: '50000',
-        type: 'limit',
-        timeInForce: 'GTC',
-      };
-      return params[param];
+  
+  describe('getTicker operation', () => {
+    it('should get ticker for specific pair successfully', async () => {
+      const mockResponse = { last: '50000', bid: '49950', ask: '50050' };
+      mockExecuteFunctions.getNodeParameter
+        .mockReturnValueOnce('getTicker')
+        .mockReturnValueOnce('btcusd');
+      mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
+      
+      const result = await executeTradingPairOperations.call(mockExecuteFunctions, [{ json: {} }]);
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].json).toEqual(mockResponse);
     });
-
-    const mockResponse = { id: '12346', status: 'Open' };
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeOrdersOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
   });
-
-  test('should create market buy order successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      const params: any = {
-        operation: 'createMarketBuyOrder',
-        pair: 'btcusd',
-        amount: '0.001',
-      };
-      return params[param];
+  
+  describe('getAllTickers operation', () => {
+    it('should get all tickers successfully', async () => {
+      const mockResponse = { btcusd: { last: '50000' }, ethusd: { last: '3000' } };
+      mockExecuteFunctions.getNodeParameter.mockReturnValue('getAllTickers');
+      mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
+      
+      const result = await executeTradingPairOperations.call(mockExecuteFunctions, [{ json: {} }]);
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].json).toEqual(mockResponse);
     });
-
-    const mockResponse = { id: '12347', status: 'Finished' };
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeOrdersOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'POST',
-        url: 'https://www.bitstamp.net/api/v2/buy/market/btcusd/',
-      })
-    );
   });
-
-  test('should cancel order successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      const params: any = {
-        operation: 'cancelOrder',
-        orderId: '12345',
-      };
-      return params[param];
+  
+  describe('getOrderBook operation', () => {
+    it('should get order book successfully', async () => {
+      const mockResponse = { bids: [['50000', '1.0']], asks: [['50100', '0.5']] };
+      mockExecuteFunctions.getNodeParameter
+        .mockReturnValueOnce('getOrderBook')
+        .mockReturnValueOnce('btcusd')
+        .mockReturnValueOnce('0');
+      mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
+      
+      const result = await executeTradingPairOperations.call(mockExecuteFunctions, [{ json: {} }]);
+      
+      expect(result).toHaveLength(1);
+      expect(result[0].json).toEqual(mockResponse);
     });
-
-    const mockResponse = { id: '12345', status: 'Cancelled' };
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeOrdersOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-  });
-
-  test('should get open orders successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      const params: any = {
-        operation: 'getOpenOrders',
-        pair: 'btcusd',
-      };
-      return params[param];
+    
+    it('should handle getOrderBook error', async () => {
+      mockExecuteFunctions.getNodeParameter
+        .mockReturnValueOnce('getOrderBook')
+        .mockReturnValueOnce('btcusd')
+        .mockReturnValueOnce('0');
+      mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(new Error('Order book error'));
+      mockExecuteFunctions.continueOnFail.mockReturnValue(true);
+      
+      const result = await executeTradingPairOperations.call(mockExecuteFunctions, [{ json: {} }]);
+      
+      expect(result[0].json.error).toBe('Order book error');
     });
-
-    const mockResponse = [{ id: '12345', status: 'Open' }];
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeOrdersOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-  });
-
-  test('should handle API error', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      const params: any = {
-        operation: 'createBuyOrder',
-        pair: 'btcusd',
-        amount: '0.001',
-        price: '50000',
-      };
-      return params[param];
-    });
-
-    const apiError = new Error('Insufficient balance');
-    mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(apiError);
-
-    await expect(
-      executeOrdersOperations.call(mockExecuteFunctions, [{ json: {} }])
-    ).rejects.toThrow('Insufficient balance');
-  });
-
-  test('should handle continueOnFail', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number) => {
-      const params: any = {
-        operation: 'createBuyOrder',
-        pair: 'btcusd',
-        amount: '0.001',
-        price: '50000',
-      };
-      return params[param];
-    });
-
-    mockExecuteFunctions.continueOnFail.mockReturnValue(true);
-    const apiError = new Error('API Error');
-    mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(apiError);
-
-    const result = await executeOrdersOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual({ error: 'API Error' });
   });
 });
 
@@ -434,434 +177,493 @@ describe('Account Resource', () => {
     mockExecuteFunctions = {
       getNodeParameter: jest.fn(),
       getCredentials: jest.fn().mockResolvedValue({
-        apiKey: 'test-api-key',
+        apiKey: 'test-key',
+        apiSecret: 'test-secret',
         customerId: 'test-customer-id',
-        secret: 'test-secret',
+        baseUrl: 'https://www.bitstamp.net/api/v2'
       }),
       getInputData: jest.fn().mockReturnValue([{ json: {} }]),
       getNode: jest.fn().mockReturnValue({ name: 'Test Node' }),
       continueOnFail: jest.fn().mockReturnValue(false),
       helpers: {
         httpRequest: jest.fn(),
-        requestWithAuthentication: jest.fn(),
+        requestWithAuthentication: jest.fn()
       },
     };
   });
 
-  describe('getBalance', () => {
-    it('should get account balance successfully', async () => {
-      const mockResponse = {
-        usd_balance: '1000.00',
-        btc_balance: '0.50000000',
-        eth_balance: '10.00000000',
-      };
+  it('should get balance successfully', async () => {
+    mockExecuteFunctions.getNodeParameter.mockReturnValue('getBalance');
+    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue({ btc_balance: '1.0', usd_balance: '1000.0' });
 
-      mockExecuteFunctions.getNodeParameter.mockImplementation((name: string, index: number) => {
-        if (name === 'operation') return 'getBalance';
-        return undefined;
-      });
+    const result = await executeAccountOperations.call(mockExecuteFunctions, [{ json: {} }]);
 
-      mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-      const result = await executeAccountOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].json).toEqual(mockResponse);
-      expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith({
-        method: 'POST',
-        url: 'https://www.bitstamp.net/api/v2/balance/',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        form: expect.objectContaining({
-          key: 'test-api-key',
-          signature: expect.any(String),
-          nonce: expect.any(String),
-        }),
-      });
-    });
-
-    it('should handle balance request error', async () => {
-      mockExecuteFunctions.getNodeParameter.mockImplementation((name: string, index: number) => {
-        if (name === 'operation') return 'getBalance';
-        return undefined;
-      });
-
-      mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(new Error('API Error'));
-
-      await expect(executeAccountOperations.call(mockExecuteFunctions, [{ json: {} }])).rejects.toThrow();
-    });
+    expect(result).toEqual([{ json: { btc_balance: '1.0', usd_balance: '1000.0' }, pairedItem: { item: 0 } }]);
   });
 
-  describe('getPairBalance', () => {
-    it('should get pair balance successfully', async () => {
-      const mockResponse = {
-        usd_balance: '500.00',
-        btc_balance: '0.25000000',
-      };
-
-      mockExecuteFunctions.getNodeParameter.mockImplementation((name: string, index: number) => {
-        if (name === 'operation') return 'getPairBalance';
-        if (name === 'pair') return 'btcusd';
-        return undefined;
-      });
-
-      mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-      const result = await executeAccountOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].json).toEqual(mockResponse);
-      expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith({
-        method: 'POST',
-        url: 'https://www.bitstamp.net/api/v2/balance/btcusd/',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        form: expect.objectContaining({
-          key: 'test-api-key',
-        }),
-      });
-    });
-  });
-
-  describe('getUserTransactions', () => {
-    it('should get user transactions successfully', async () => {
-      const mockResponse = [
-        {
-          datetime: '2023-01-01 12:00:00',
-          id: 12345,
-          type: '0',
-          usd: '-100.00',
-          btc: '0.01000000',
-        },
-      ];
-
-      mockExecuteFunctions.getNodeParameter.mockImplementation((name: string, index: number, defaultValue?: any) => {
-        if (name === 'operation') return 'getUserTransactions';
-        if (name === 'offset') return defaultValue || 0;
-        if (name === 'limit') return defaultValue || 100;
-        if (name === 'sort') return defaultValue || 'desc';
-        return undefined;
-      });
-
-      mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-      const result = await executeAccountOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].json).toEqual(mockResponse);
-      expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith({
-        method: 'POST',
-        url: 'https://www.bitstamp.net/api/v2/user_transactions/',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        form: expect.objectContaining({
-          key: 'test-api-key',
-          offset: '0',
-          limit: '100',
-          sort: 'desc',
-        }),
-      });
-    });
-  });
-
-  describe('getTradingFees', () => {
-    it('should get trading fees successfully', async () => {
-      const mockResponse = {
-        maker_fee: '0.005',
-        taker_fee: '0.005',
-      };
-
-      mockExecuteFunctions.getNodeParameter.mockImplementation((name: string, index: number) => {
-        if (name === 'operation') return 'getTradingFees';
-        if (name === 'pair') return 'btcusd';
-        return undefined;
-      });
-
-      mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-      const result = await executeAccountOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-      expect(result).toHaveLength(1);
-      expect(result[0].json).toEqual(mockResponse);
-      expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith({
-        method: 'POST',
-        url: 'https://www.bitstamp.net/api/v2/trading-fees/btcusd/',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        form: expect.objectContaining({
-          key: 'test-api-key',
-        }),
-      });
-    });
-  });
-});
-
-describe('Withdrawals Resource', () => {
-  let mockExecuteFunctions: any;
-
-  beforeEach(() => {
-    mockExecuteFunctions = {
-      getNodeParameter: jest.fn(),
-      getCredentials: jest.fn().mockResolvedValue({
-        apiKey: 'test-api-key',
-        apiSecret: 'test-api-secret',
-        customerId: 'test-customer-id',
-        baseUrl: 'https://www.bitstamp.net/api/v2',
-      }),
-      getInputData: jest.fn().mockReturnValue([{ json: {} }]),
-      getNode: jest.fn().mockReturnValue({ name: 'Test Node' }),
-      continueOnFail: jest.fn().mockReturnValue(false),
-      helpers: {
-        httpRequest: jest.fn(),
-        requestWithAuthentication: jest.fn(),
-      },
-    };
-  });
-
-  it('should get withdrawal requests successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'getWithdrawalRequests';
-      if (param === 'timedelta') return 86400;
-    });
-
-    const mockResponse = [{ id: '123', status: 'completed', amount: '0.001' }];
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeWithdrawalsOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'POST',
-        url: 'https://www.bitstamp.net/api/v2/withdrawal-requests/',
-      })
-    );
-  });
-
-  it('should get open withdrawals successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'getOpenWithdrawals';
-    });
-
-    const mockResponse = [{ id: '456', status: 'pending', amount: '0.002' }];
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeWithdrawalsOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-  });
-
-  it('should get withdrawal status successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'getWithdrawalStatus';
-      if (param === 'id') return '123';
-    });
-
-    const mockResponse = { id: '123', status: 'completed', amount: '0.001' };
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeWithdrawalsOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-  });
-
-  it('should cancel withdrawal successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'cancelWithdrawal';
-      if (param === 'id') return '123';
-    });
-
-    const mockResponse = { id: '123', status: 'cancelled' };
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeWithdrawalsOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-  });
-
-  it('should withdraw Bitcoin successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'withdrawBitcoin';
-      if (param === 'amount') return '0.001';
-      if (param === 'address') return '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
-      if (param === 'instant') return false;
-    });
-
-    const mockResponse = { id: '789', status: 'processing' };
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeWithdrawalsOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-  });
-
-  it('should withdraw fiat successfully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'withdrawFiat';
-      if (param === 'amount') return '1000';
-      if (param === 'account_currency') return 'EUR';
-      if (param === 'name') return 'John Doe';
-      if (param === 'iban') return 'DE89370400440532013000';
-      if (param === 'bic') return 'DEUTDEFF';
-    });
-
-    const mockResponse = { id: '999', status: 'processing' };
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-
-    const result = await executeWithdrawalsOperations.call(mockExecuteFunctions, [{ json: {} }]);
-
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-  });
-
-  it('should handle API errors gracefully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'getWithdrawalRequests';
-      if (param === 'timedelta') return 86400;
-    });
-
+  it('should handle get balance error', async () => {
+    mockExecuteFunctions.getNodeParameter.mockReturnValue('getBalance');
     mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(new Error('API Error'));
     mockExecuteFunctions.continueOnFail.mockReturnValue(true);
 
-    const result = await executeWithdrawalsOperations.call(mockExecuteFunctions, [{ json: {} }]);
+    const result = await executeAccountOperations.call(mockExecuteFunctions, [{ json: {} }]);
 
-    expect(result).toHaveLength(1);
-    expect(result[0].json.error).toBe('API Error');
+    expect(result).toEqual([{ json: { error: 'API Error' }, pairedItem: { item: 0 } }]);
+  });
+
+  it('should get pair balance successfully', async () => {
+    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
+      if (param === 'operation') return 'getPairBalance';
+      if (param === 'pair') return 'btcusd';
+      return undefined;
+    });
+    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue({ btc_balance: '1.0', usd_balance: '1000.0' });
+
+    const result = await executeAccountOperations.call(mockExecuteFunctions, [{ json: {} }]);
+
+    expect(result).toEqual([{ json: { btc_balance: '1.0', usd_balance: '1000.0' }, pairedItem: { item: 0 } }]);
+  });
+
+  it('should get user transactions successfully', async () => {
+    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number, defaultValue?: any) => {
+      if (param === 'operation') return 'getUserTransactions';
+      if (param === 'offset') return defaultValue || 0;
+      if (param === 'limit') return defaultValue || 100;
+      if (param === 'sort') return defaultValue || 'desc';
+      return defaultValue || '';
+    });
+    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue([{ id: '123', type: 2 }]);
+
+    const result = await executeAccountOperations.call(mockExecuteFunctions, [{ json: {} }]);
+
+    expect(result).toEqual([{ json: [{ id: '123', type: 2 }], pairedItem: { item: 0 } }]);
+  });
+
+  it('should get pair transactions successfully', async () => {
+    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string, index: number, defaultValue?: any) => {
+      if (param === 'operation') return 'getPairTransactions';
+      if (param === 'pair') return 'btcusd';
+      if (param === 'offset') return defaultValue || 0;
+      if (param === 'limit') return defaultValue || 100;
+      if (param === 'sort') return defaultValue || 'desc';
+      return defaultValue || '';
+    });
+    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue([{ id: '456', type: 2, btc: '0.1' }]);
+
+    const result = await executeAccountOperations.call(mockExecuteFunctions, [{ json: {} }]);
+
+    expect(result).toEqual([{ json: [{ id: '456', type: 2, btc: '0.1' }], pairedItem: { item: 0 } }]);
   });
 });
 
-describe('Deposits Resource', () => {
+describe('Order Resource', () => {
   let mockExecuteFunctions: any;
 
   beforeEach(() => {
     mockExecuteFunctions = {
       getNodeParameter: jest.fn(),
       getCredentials: jest.fn().mockResolvedValue({
-        apiKey: 'test-api-key',
-        apiSecret: 'test-api-secret',
+        apiKey: 'test-key',
+        apiSecret: 'test-secret',
         customerId: 'test-customer-id',
+        baseUrl: 'https://www.bitstamp.net/api/v2'
       }),
       getInputData: jest.fn().mockReturnValue([{ json: {} }]),
       getNode: jest.fn().mockReturnValue({ name: 'Test Node' }),
       continueOnFail: jest.fn().mockReturnValue(false),
       helpers: {
-        httpRequest: jest.fn(),
-        requestWithAuthentication: jest.fn(),
+        httpRequest: jest.fn()
       },
     };
   });
 
-  test('should get Bitcoin address successfully', async () => {
-    const mockResponse = {
-      address: '1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2',
-    };
-    
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'getBitcoinAddress';
-      return '';
-    });
-    
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-    
-    const result = await executeDepositsOperations.call(
-      mockExecuteFunctions,
-      [{ json: {} }]
-    );
-    
-    expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'POST',
-        url: 'https://www.bitstamp.net/api/v2/btc_address/',
-      })
-    );
-  });
+  it('should create a buy order successfully', async () => {
+    mockExecuteFunctions.getNodeParameter
+      .mockReturnValueOnce('createBuyOrder')
+      .mockReturnValueOnce('btcusd')
+      .mockReturnValueOnce(0.001)
+      .mockReturnValueOnce(50000)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(false);
 
-  test('should transfer to main account successfully', async () => {
-    const mockResponse = {
-      id: '123456789',
+    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue({
+      id: '12345',
       datetime: '2023-01-01 12:00:00',
-    };
-    
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'transferToMain';
-      if (param === 'amount') return '100.00';
-      if (param === 'currency') return 'USD';
-      if (param === 'subaccount') return 'sub123';
-      return '';
+      type: '0',
+      price: '50000',
+      amount: '0.001'
     });
-    
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-    
-    const result = await executeDepositsOperations.call(
-      mockExecuteFunctions,
-      [{ json: {} }]
-    );
-    
+
+    const items = [{ json: {} }];
+    const result = await executeOrderOperations.call(mockExecuteFunctions, items);
+
     expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
+    expect(result[0].json.id).toBe('12345');
     expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'POST',
-        url: 'https://www.bitstamp.net/api/v2/transfer-to-main/',
+        url: 'https://www.bitstamp.net/api/v2/buy/btcusd/',
+        form: expect.objectContaining({
+          amount: '0.001',
+          price: '50000'
+        })
       })
     );
   });
 
-  test('should handle API errors gracefully', async () => {
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'getBitcoinAddress';
-      return '';
+  it('should cancel an order successfully', async () => {
+    mockExecuteFunctions.getNodeParameter
+      .mockReturnValueOnce('cancelOrder')
+      .mockReturnValueOnce('12345');
+
+    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue({
+      id: '12345',
+      amount: '0.001',
+      price: '50000',
+      type: '0'
     });
-    
-    const apiError = new Error('API Error');
-    mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(apiError);
-    mockExecuteFunctions.continueOnFail.mockReturnValue(true);
-    
-    const result = await executeDepositsOperations.call(
-      mockExecuteFunctions,
-      [{ json: {} }]
+
+    const items = [{ json: {} }];
+    const result = await executeOrderOperations.call(mockExecuteFunctions, items);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].json.id).toBe('12345');
+    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        url: 'https://www.bitstamp.net/api/v2/cancel_order/',
+        form: expect.objectContaining({
+          id: '12345'
+        })
+      })
     );
-    
+  });
+
+  it('should get all open orders successfully', async () => {
+    mockExecuteFunctions.getNodeParameter.mockReturnValueOnce('getAllOpenOrders');
+
+    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue([
+      {
+        id: '12345',
+        datetime: '2023-01-01 12:00:00',
+        type: '0',
+        price: '50000',
+        amount: '0.001',
+        currency_pair: 'BTC/USD'
+      }
+    ]);
+
+    const items = [{ json: {} }];
+    const result = await executeOrderOperations.call(mockExecuteFunctions, items);
+
+    expect(result).toHaveLength(1);
+    expect(Array.isArray(result[0].json)).toBe(true);
+    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'POST',
+        url: 'https://www.bitstamp.net/api/v2/open_orders/all/'
+      })
+    );
+  });
+
+  it('should handle errors when continuing on fail', async () => {
+    mockExecuteFunctions.getNodeParameter.mockReturnValueOnce('createBuyOrder');
+    mockExecuteFunctions.continueOnFail.mockReturnValue(true);
+    mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(new Error('API Error'));
+
+    const items = [{ json: {} }];
+    const result = await executeOrderOperations.call(mockExecuteFunctions, items);
+
     expect(result).toHaveLength(1);
     expect(result[0].json.error).toBe('API Error');
   });
-  
-  test('should get Ethereum address successfully', async () => {
-    const mockResponse = {
-      address: '0x742d35cc6648c532c5c2b4c0a3c9d7d7f5d5c5e5',
+
+  it('should throw error when not continuing on fail', async () => {
+    mockExecuteFunctions.getNodeParameter.mockReturnValueOnce('createBuyOrder');
+    mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(new Error('API Error'));
+
+    const items = [{ json: {} }];
+    await expect(executeOrderOperations.call(mockExecuteFunctions, items)).rejects.toThrow('API Error');
+  });
+});
+
+describe('Withdrawal Resource', () => {
+	let mockExecuteFunctions: any;
+
+	beforeEach(() => {
+		mockExecuteFunctions = {
+			getNodeParameter: jest.fn(),
+			getCredentials: jest.fn().mockResolvedValue({
+				apiKey: 'test-key',
+				apiSecret: 'test-secret',
+				customerId: 'test-customer',
+				baseUrl: 'https://www.bitstamp.net/api/v2',
+			}),
+			getInputData: jest.fn().mockReturnValue([{ json: {} }]),
+			getNode: jest.fn().mockReturnValue({ name: 'Test Node' }),
+			continueOnFail: jest.fn().mockReturnValue(false),
+			helpers: {
+				httpRequest: jest.fn(),
+			},
+		};
+	});
+
+	it('should get withdrawal requests successfully', async () => {
+		mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
+			if (param === 'operation') return 'getWithdrawalRequests';
+			if (param === 'timedelta') return 86400;
+			return undefined;
+		});
+
+		mockExecuteFunctions.helpers.httpRequest.mockResolvedValue([
+			{ id: 1, amount: '100.00', currency: 'USD' },
+		]);
+
+		const result = await executeWithdrawalOperations.call(
+			mockExecuteFunctions,
+			[{ json: {} }],
+		);
+
+		expect(result).toHaveLength(1);
+		expect(result[0].json).toEqual([
+			{ id: 1, amount: '100.00', currency: 'USD' },
+		]);
+	});
+
+	it('should withdraw Bitcoin successfully', async () => {
+		mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
+			if (param === 'operation') return 'withdrawBitcoin';
+			if (param === 'amount') return '0.01';
+			if (param === 'address') return '1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa';
+			if (param === 'instant') return false;
+			return undefined;
+		});
+
+		mockExecuteFunctions.helpers.httpRequest.mockResolvedValue({
+			id: 'withdrawal123',
+			status: 'pending',
+		});
+
+		const result = await executeWithdrawalOperations.call(
+			mockExecuteFunctions,
+			[{ json: {} }],
+		);
+
+		expect(result).toHaveLength(1);
+		expect(result[0].json).toEqual({
+			id: 'withdrawal123',
+			status: 'pending',
+		});
+	});
+
+	it('should handle API errors', async () => {
+		mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
+			if (param === 'operation') return 'getWithdrawalRequests';
+			return undefined;
+		});
+
+		mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(
+			new Error('API Error'),
+		);
+
+		await expect(
+			executeWithdrawalOperations.call(mockExecuteFunctions, [{ json: {} }]),
+		).rejects.toThrow('API Error');
+	});
+
+	it('should continue on fail when enabled', async () => {
+		mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
+			if (param === 'operation') return 'getWithdrawalRequests';
+			return undefined;
+		});
+
+		mockExecuteFunctions.continueOnFail.mockReturnValue(true);
+		mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(
+			new Error('API Error'),
+		);
+
+		const result = await executeWithdrawalOperations.call(
+			mockExecuteFunctions,
+			[{ json: {} }],
+		);
+
+		expect(result).toHaveLength(1);
+		expect(result[0].json).toEqual({ error: 'API Error' });
+	});
+});
+
+describe('Deposit Resource', () => {
+  let mockExecuteFunctions: any;
+  beforeEach(() => {
+    mockExecuteFunctions = {
+      getNodeParameter: jest.fn(),
+      getCredentials: jest.fn().mockResolvedValue({ 
+        apiKey: 'test-key', 
+        apiSecret: 'test-secret',
+        customerId: 'test-customer-id',
+        baseUrl: 'https://www.bitstamp.net/api'
+      }),
+      getInputData: jest.fn().mockReturnValue([{ json: {} }]),
+      getNode: jest.fn().mockReturnValue({ name: 'Test Node' }),
+      continueOnFail: jest.fn().mockReturnValue(false),
+      helpers: { httpRequest: jest.fn(), requestWithAuthentication: jest.fn() },
     };
+  });
+
+  it('should get Bitcoin address successfully', async () => {
+    mockExecuteFunctions.getNodeParameter.mockReturnValue('getBitcoinAddress');
+    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue('{"address": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"}');
     
-    mockExecuteFunctions.getNodeParameter.mockImplementation((param: string) => {
-      if (param === 'operation') return 'getEthereumAddress';
-      return '';
-    });
-    
-    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue(mockResponse);
-    
-    const result = await executeDepositsOperations.call(
-      mockExecuteFunctions,
-      [{ json: {} }]
-    );
+    const items = [{ json: {} }];
+    const result = await executeDepositOperations.call(mockExecuteFunctions, items);
     
     expect(result).toHaveLength(1);
-    expect(result[0].json).toEqual(mockResponse);
-    expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'POST',
-        url: 'https://www.bitstamp.net/api/v2/eth_address/',
-      })
-    );
+    expect(result[0].json).toEqual({ address: "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" });
   });
+
+  it('should get Litecoin address successfully', async () => {
+    mockExecuteFunctions.getNodeParameter.mockReturnValue('getLitecoinAddress');
+    mockExecuteFunctions.helpers.httpRequest.mockResolvedValue('{"address": "LQTpS3VaEw7JzqJkQbR6qJgJzJ8q8q8q8q"}');
+    
+    const items = [{ json: {} }];
+    const result = await executeDepositOperations.call(mockExecuteFunctions, items);
+    
+    expect(result).toHaveLength(1);
+    expect(result[0].json).toEqual({ address: "LQTpS3VaEw7JzqJkQbR6qJgJzJ8q8q8q8q" });
+  });
+
+  it('should handle API errors', async () => {
+    mockExecuteFunctions.getNodeParameter.mockReturnValue('getBitcoinAddress');
+    mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(new Error('API Error'));
+    mockExecuteFunctions.continueOnFail.mockReturnValue(true);
+    
+    const items = [{ json: {} }];
+    const result = await executeDepositOperations.call(mockExecuteFunctions, items);
+    
+    expect(result).toHaveLength(1);
+    expect(result[0].json).toEqual({ error: 'API Error' });
+  });
+
+  it('should throw error when operation is unknown', async () => {
+    mockExecuteFunctions.getNodeParameter.mockReturnValue('unknownOperation');
+    
+    const items = [{ json: {} }];
+    
+    await expect(executeDepositOperations.call(mockExecuteFunctions, items)).rejects.toThrow('Unknown operation: unknownOperation');
+  });
+});
+
+describe('Transfer Resource', () => {
+	let mockExecuteFunctions: any;
+
+	beforeEach(() => {
+		mockExecuteFunctions = {
+			getNodeParameter: jest.fn(),
+			getCredentials: jest.fn().mockResolvedValue({
+				apiKey: 'test-key',
+				apiSecret: 'test-secret',
+				customerId: 'test-customer-id',
+			}),
+			getInputData: jest.fn().mockReturnValue([{ json: {} }]),
+			getNode: jest.fn().mockReturnValue({ name: 'Test Node' }),
+			continueOnFail: jest.fn().mockReturnValue(false),
+			helpers: {
+				httpRequest: jest.fn(),
+				requestWithAuthentication: jest.fn(),
+			},
+		};
+	});
+
+	describe('transferToMain', () => {
+		it('should transfer funds to main account successfully', async () => {
+			mockExecuteFunctions.getNodeParameter
+				.mockReturnValueOnce('transferToMain')
+				.mockReturnValueOnce('100')
+				.mockReturnValueOnce('USD')
+				.mockReturnValueOnce('sub123');
+
+			mockExecuteFunctions.helpers.httpRequest.mockResolvedValue({
+				status: 'Complete',
+				amount: '100',
+				currency: 'USD',
+			});
+
+			const result = await executeTransferOperations.call(mockExecuteFunctions, [{ json: {} }]);
+
+			expect(result).toHaveLength(1);
+			expect(result[0].json).toHaveProperty('status', 'Complete');
+			expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
+				expect.objectContaining({
+					method: 'POST',
+					url: 'https://www.bitstamp.net/api/v2/transfer-to-main/',
+				})
+			);
+		});
+
+		it('should handle transfer to main errors', async () => {
+			mockExecuteFunctions.getNodeParameter
+				.mockReturnValueOnce('transferToMain')
+				.mockReturnValueOnce('100')
+				.mockReturnValueOnce('USD')
+				.mockReturnValueOnce('sub123');
+
+			mockExecuteFunctions.helpers.httpRequest.mockRejectedValue(new Error('Transfer failed'));
+			mockExecuteFunctions.continueOnFail.mockReturnValue(true);
+
+			const result = await executeTransferOperations.call(mockExecuteFunctions, [{ json: {} }]);
+
+			expect(result).toHaveLength(1);
+			expect(result[0].json).toHaveProperty('error', 'Transfer failed');
+		});
+	});
+
+	describe('transferFromMain', () => {
+		it('should transfer funds from main account successfully', async () => {
+			mockExecuteFunctions.getNodeParameter
+				.mockReturnValueOnce('transferFromMain')
+				.mockReturnValueOnce('50')
+				.mockReturnValueOnce('BTC')
+				.mockReturnValueOnce('sub456');
+
+			mockExecuteFunctions.helpers.httpRequest.mockResolvedValue({
+				status: 'Complete',
+				amount: '50',
+				currency: 'BTC',
+			});
+
+			const result = await executeTransferOperations.call(mockExecuteFunctions, [{ json: {} }]);
+
+			expect(result).toHaveLength(1);
+			expect(result[0].json).toHaveProperty('status', 'Complete');
+			expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
+				expect.objectContaining({
+					method: 'POST',
+					url: 'https://www.bitstamp.net/api/v2/transfer-from-main/',
+				})
+			);
+		});
+	});
+
+	describe('getSubAccounts', () => {
+		it('should retrieve sub-accounts successfully', async () => {
+			mockExecuteFunctions.getNodeParameter.mockReturnValueOnce('getSubAccounts');
+
+			mockExecuteFunctions.helpers.httpRequest.mockResolvedValue([
+				{ id: 'sub123', name: 'Sub Account 1' },
+				{ id: 'sub456', name: 'Sub Account 2' },
+			]);
+
+			const result = await executeTransferOperations.call(mockExecuteFunctions, [{ json: {} }]);
+
+			expect(result).toHaveLength(1);
+			expect(result[0].json).toHaveLength(2);
+			expect(mockExecuteFunctions.helpers.httpRequest).toHaveBeenCalledWith(
+				expect.objectContaining({
+					method: 'POST',
+					url: 'https://www.bitstamp.net/api/v2/sub-account/',
+				})
+			);
+		});
+	});
 });
 });
