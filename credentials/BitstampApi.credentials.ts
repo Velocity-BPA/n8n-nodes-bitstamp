@@ -15,7 +15,7 @@ export class BitstampApi implements ICredentialType {
 			typeOptions: { password: true },
 			default: '',
 			required: true,
-			description: 'The API key for Bitstamp API access',
+			description: 'Your Bitstamp API key',
 		},
 		{
 			displayName: 'API Secret',
@@ -24,7 +24,7 @@ export class BitstampApi implements ICredentialType {
 			typeOptions: { password: true },
 			default: '',
 			required: true,
-			description: 'The API secret for Bitstamp API access',
+			description: 'Your Bitstamp API secret',
 		},
 		{
 			displayName: 'Customer ID',
@@ -32,7 +32,7 @@ export class BitstampApi implements ICredentialType {
 			type: 'string',
 			default: '',
 			required: true,
-			description: 'Your Bitstamp customer ID (username)',
+			description: 'Your Bitstamp customer ID',
 		},
 		{
 			displayName: 'API Base URL',
@@ -40,7 +40,7 @@ export class BitstampApi implements ICredentialType {
 			type: 'string',
 			default: 'https://www.bitstamp.net/api/v2',
 			required: true,
-			description: 'The base URL for the Bitstamp API',
+			description: 'The base URL for Bitstamp API',
 		},
 	];
 }
